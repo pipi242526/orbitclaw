@@ -3,6 +3,7 @@
 import asyncio
 import json
 import uuid
+from contextlib import AsyncExitStack
 from pathlib import Path
 from typing import Any
 
@@ -14,7 +15,12 @@ from nanobot.providers.base import LLMProvider
 from nanobot.agent.tools.registry import ToolRegistry
 from nanobot.agent.tools.filesystem import ReadFileTool, WriteFileTool, EditFileTool, ListDirTool
 from nanobot.agent.tools.shell import ExecTool
-from nanobot.agent.tools.web import WebSearchTool, WebFetchTool
+from nanobot.agent.tools.web import (
+    WebSearchTool,
+    WebFetchTool,
+    has_exa_search_mcp,
+    install_exa_web_search_alias,
+)
 
 
 class SubagentManager:
@@ -37,6 +43,7 @@ class SubagentManager:
         brave_api_key: str | None = None,
         exec_config: "ExecToolConfig | None" = None,
         restrict_to_workspace: bool = False,
+        mcp_servers: dict | None = None,
     ):
         from nanobot.config.schema import ExecToolConfig
         self.provider = provider
@@ -48,6 +55,8 @@ class SubagentManager:
         self.brave_api_key = brave_api_key
         self.exec_config = exec_config or ExecToolConfig()
         self.restrict_to_workspace = restrict_to_workspace
+        self._mcp_servers = mcp_servers or {}
+        self._prefer_exa_mcp_web_search = has_exa_search_mcp(self._mcp_servers)
         self._running_tasks: dict[str, asyncio.Task[None]] = {}
     
     async def spawn(
@@ -98,90 +107,123 @@ class SubagentManager:
     ) -> None:
         """Execute the subagent task and announce the result."""
         logger.info("Subagent [{}] starting task: {}", task_id, label)
-        
+
         try:
-            # Build subagent tools (no message tool, no spawn tool)
-            tools = ToolRegistry()
-            allowed_dir = self.workspace if self.restrict_to_workspace else None
-            tools.register(ReadFileTool(workspace=self.workspace, allowed_dir=allowed_dir))
-            tools.register(WriteFileTool(workspace=self.workspace, allowed_dir=allowed_dir))
-            tools.register(EditFileTool(workspace=self.workspace, allowed_dir=allowed_dir))
-            tools.register(ListDirTool(workspace=self.workspace, allowed_dir=allowed_dir))
-            tools.register(ExecTool(
-                working_dir=str(self.workspace),
-                timeout=self.exec_config.timeout,
-                restrict_to_workspace=self.restrict_to_workspace,
-            ))
-            tools.register(WebSearchTool(api_key=self.brave_api_key))
-            tools.register(WebFetchTool())
+            async with AsyncExitStack() as mcp_stack:
+                # Build subagent tools (no message tool, no spawn tool)
+                tools = ToolRegistry()
+                allowed_dir = self.workspace if self.restrict_to_workspace else None
+                tools.register(ReadFileTool(workspace=self.workspace, allowed_dir=allowed_dir))
+                tools.register(WriteFileTool(workspace=self.workspace, allowed_dir=allowed_dir))
+                tools.register(EditFileTool(workspace=self.workspace, allowed_dir=allowed_dir))
+                tools.register(ListDirTool(workspace=self.workspace, allowed_dir=allowed_dir))
+                tools.register(ExecTool(
+                    working_dir=str(self.workspace),
+                    timeout=self.exec_config.timeout,
+                    restrict_to_workspace=self.restrict_to_workspace,
+                ))
+                self._register_subagent_web_search_initial(tools)
+                tools.register(WebFetchTool())
+
+                if self._mcp_servers:
+                    from nanobot.agent.tools.mcp import connect_mcp_servers
+                    await connect_mcp_servers(self._mcp_servers, tools, mcp_stack)
+                    if self._prefer_exa_mcp_web_search:
+                        if not self._install_exa_web_search_alias_if_available(tools):
+                            logger.warning(
+                                "Subagent [{}]: Exa MCP configured but 'web_search_exa' not found; using Brave fallback if available",
+                                task_id,
+                            )
+                            self._register_subagent_brave_web_search_fallback(tools)
             
-            # Build messages with subagent-specific prompt
-            system_prompt = self._build_subagent_prompt(task)
-            messages: list[dict[str, Any]] = [
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": task},
-            ]
-            
-            # Run agent loop (limited iterations)
-            max_iterations = 15
-            iteration = 0
-            final_result: str | None = None
-            
-            while iteration < max_iterations:
-                iteration += 1
+                # Build messages with subagent-specific prompt
+                system_prompt = self._build_subagent_prompt(task)
+                messages: list[dict[str, Any]] = [
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": task},
+                ]
                 
-                response = await self.provider.chat(
-                    messages=messages,
-                    tools=tools.get_definitions(),
-                    model=self.model,
-                    temperature=self.temperature,
-                    max_tokens=self.max_tokens,
-                )
+                # Run agent loop (limited iterations)
+                max_iterations = 15
+                iteration = 0
+                final_result: str | None = None
                 
-                if response.has_tool_calls:
-                    # Add assistant message with tool calls
-                    tool_call_dicts = [
-                        {
-                            "id": tc.id,
-                            "type": "function",
-                            "function": {
-                                "name": tc.name,
-                                "arguments": json.dumps(tc.arguments, ensure_ascii=False),
-                            },
-                        }
-                        for tc in response.tool_calls
-                    ]
-                    messages.append({
-                        "role": "assistant",
-                        "content": response.content or "",
-                        "tool_calls": tool_call_dicts,
-                    })
+                while iteration < max_iterations:
+                    iteration += 1
                     
-                    # Execute tools
-                    for tool_call in response.tool_calls:
-                        args_str = json.dumps(tool_call.arguments, ensure_ascii=False)
-                        logger.debug("Subagent [{}] executing: {} with arguments: {}", task_id, tool_call.name, args_str)
-                        result = await tools.execute(tool_call.name, tool_call.arguments)
+                    response = await self.provider.chat(
+                        messages=messages,
+                        tools=tools.get_definitions(),
+                        model=self.model,
+                        temperature=self.temperature,
+                        max_tokens=self.max_tokens,
+                    )
+                    
+                    if response.has_tool_calls:
+                        # Add assistant message with tool calls
+                        tool_call_dicts = [
+                            {
+                                "id": tc.id,
+                                "type": "function",
+                                "function": {
+                                    "name": tc.name,
+                                    "arguments": json.dumps(tc.arguments, ensure_ascii=False),
+                                },
+                            }
+                            for tc in response.tool_calls
+                        ]
                         messages.append({
-                            "role": "tool",
-                            "tool_call_id": tool_call.id,
-                            "name": tool_call.name,
-                            "content": result,
+                            "role": "assistant",
+                            "content": response.content or "",
+                            "tool_calls": tool_call_dicts,
                         })
-                else:
-                    final_result = response.content
-                    break
-            
-            if final_result is None:
-                final_result = "Task completed but no final response was generated."
-            
-            logger.info("Subagent [{}] completed successfully", task_id)
-            await self._announce_result(task_id, label, task, final_result, origin, "ok")
-            
+                        
+                        # Execute tools
+                        for tool_call in response.tool_calls:
+                            args_str = json.dumps(tool_call.arguments, ensure_ascii=False)
+                            logger.debug("Subagent [{}] executing: {} with arguments: {}", task_id, tool_call.name, args_str)
+                            result = await tools.execute(tool_call.name, tool_call.arguments)
+                            messages.append({
+                                "role": "tool",
+                                "tool_call_id": tool_call.id,
+                                "name": tool_call.name,
+                                "content": result,
+                            })
+                    else:
+                        final_result = response.content
+                        break
+                
+                if final_result is None:
+                    final_result = "Task completed but no final response was generated."
+                
+                logger.info("Subagent [{}] completed successfully", task_id)
+                await self._announce_result(task_id, label, task, final_result, origin, "ok")
+
         except Exception as e:
             error_msg = f"Error: {str(e)}"
             logger.error("Subagent [{}] failed: {}", task_id, e)
             await self._announce_result(task_id, label, task, error_msg, origin, "error")
+
+    def _register_subagent_web_search_initial(self, tools: ToolRegistry) -> None:
+        if self._prefer_exa_mcp_web_search:
+            logger.info("Subagent: Exa MCP detected; deferring built-in web_search registration until MCP connects")
+            return
+        self._register_subagent_brave_web_search_fallback(tools)
+
+    def _register_subagent_brave_web_search_fallback(self, tools: ToolRegistry) -> None:
+        if tools.has("web_search"):
+            return
+        if self.brave_api_key:
+            tools.register(WebSearchTool(api_key=self.brave_api_key))
+            return
+        logger.info("Subagent: BRAVE_API_KEY not set; skipping built-in web_search tool")
+
+    def _install_exa_web_search_alias_if_available(self, tools: ToolRegistry) -> bool:
+        wrapped = install_exa_web_search_alias(tools)
+        if not wrapped:
+            return False
+        logger.info("Subagent: registered web_search compatibility alias -> {}", wrapped)
+        return True
     
     async def _announce_result(
         self,

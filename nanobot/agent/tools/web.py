@@ -90,6 +90,99 @@ class WebSearchTool(Tool):
             return f"Error: {e}"
 
 
+class MCPWebSearchCompatTool(Tool):
+    """Expose an MCP search tool behind the built-in `web_search` interface."""
+
+    name = "web_search"
+    description = "Search the web (via MCP/Exa). Returns titles, URLs, and snippets."
+    parameters = {
+        "type": "object",
+        "properties": {
+            "query": {"type": "string", "description": "Search query"},
+            "count": {"type": "integer", "description": "Results (1-10)", "minimum": 1, "maximum": 10}
+        },
+        "required": ["query"]
+    }
+
+    def __init__(self, delegate: Tool, max_results: int = 5):
+        self._delegate = delegate
+        self._max_results = max_results
+
+    def _map_args(self, query: str, count: int | None) -> dict[str, Any]:
+        schema = self._delegate.parameters or {}
+        props = schema.get("properties", {}) if isinstance(schema, dict) else {}
+        mapped: dict[str, Any] = {}
+
+        # Query parameter (Exa MCP uses "query")
+        for key in ("query", "q", "searchQuery", "search_query"):
+            if key in props:
+                mapped[key] = query
+                break
+        else:
+            mapped["query"] = query
+
+        n = min(max(count or self._max_results, 1), 10)
+        for key in ("count", "numResults", "num_results", "limit", "max_results", "k"):
+            if key in props:
+                mapped[key] = n
+                break
+
+        return mapped
+
+    async def execute(self, query: str, count: int | None = None, **kwargs: Any) -> str:
+        return await self._delegate.execute(**self._map_args(query=query, count=count))
+
+
+def _mcp_cfg_field(cfg: Any, field: str) -> str:
+    if isinstance(cfg, dict):
+        value = cfg.get(field, "")
+    else:
+        value = getattr(cfg, field, "")
+    return value if isinstance(value, str) else ""
+
+
+def has_exa_search_mcp(mcp_servers: dict[str, Any] | None) -> bool:
+    """Detect whether an Exa MCP server is configured."""
+    if not mcp_servers:
+        return False
+    for name, cfg in mcp_servers.items():
+        if str(name).lower() == "exa":
+            return True
+        url = _mcp_cfg_field(cfg, "url").lower()
+        if "exa.ai" in url:
+            return True
+        cmd = _mcp_cfg_field(cfg, "command").lower()
+        args = []
+        if isinstance(cfg, dict):
+            args = cfg.get("args", []) or []
+        else:
+            args = getattr(cfg, "args", []) or []
+        joined = " ".join(str(x).lower() for x in args)
+        if "exa" in cmd or "exa-mcp" in joined or "mcp.exa.ai" in joined:
+            return True
+    return False
+
+
+def install_exa_web_search_alias(registry: Any) -> str | None:
+    """Register `web_search` alias for an Exa MCP tool if present. Returns wrapped tool name."""
+    names = list(getattr(registry, "tool_names", []))
+    if not names:
+        return None
+
+    candidates = [n for n in names if n.startswith("mcp_") and n.endswith("_web_search_exa")]
+    if not candidates:
+        return None
+
+    candidates.sort(key=lambda n: (0 if n.startswith("mcp_exa_") else 1, n))
+    delegate_name = candidates[0]
+    delegate = registry.get(delegate_name)
+    if not delegate:
+        return None
+
+    registry.register(MCPWebSearchCompatTool(delegate=delegate))
+    return delegate_name
+
+
 class WebFetchTool(Tool):
     """Fetch and extract content from a URL using Readability."""
     

@@ -20,7 +20,12 @@ from nanobot.agent.tools.message import MessageTool
 from nanobot.agent.tools.registry import ToolRegistry
 from nanobot.agent.tools.shell import ExecTool
 from nanobot.agent.tools.spawn import SpawnTool
-from nanobot.agent.tools.web import WebFetchTool, WebSearchTool
+from nanobot.agent.tools.web import (
+    WebFetchTool,
+    WebSearchTool,
+    has_exa_search_mcp,
+    install_exa_web_search_alias,
+)
 from nanobot.bus.events import InboundMessage, OutboundMessage
 from nanobot.bus.queue import MessageBus
 from nanobot.providers.base import LLMProvider
@@ -77,6 +82,8 @@ class AgentLoop:
         self.context = ContextBuilder(workspace)
         self.sessions = session_manager or SessionManager(workspace)
         self.tools = ToolRegistry()
+        self._mcp_servers = mcp_servers or {}
+        self._prefer_exa_mcp_web_search = has_exa_search_mcp(self._mcp_servers)
         self.subagents = SubagentManager(
             provider=provider,
             workspace=workspace,
@@ -87,10 +94,10 @@ class AgentLoop:
             brave_api_key=brave_api_key,
             exec_config=self.exec_config,
             restrict_to_workspace=restrict_to_workspace,
+            mcp_servers=self._mcp_servers,
         )
 
         self._running = False
-        self._mcp_servers = mcp_servers or {}
         self._mcp_stack: AsyncExitStack | None = None
         self._mcp_connected = False
         self._mcp_connecting = False
@@ -109,12 +116,34 @@ class AgentLoop:
             timeout=self.exec_config.timeout,
             restrict_to_workspace=self.restrict_to_workspace,
         ))
-        self.tools.register(WebSearchTool(api_key=self.brave_api_key))
+        self._register_web_search_tool_initial()
         self.tools.register(WebFetchTool())
         self.tools.register(MessageTool(send_callback=self.bus.publish_outbound))
         self.tools.register(SpawnTool(manager=self.subagents))
         if self.cron_service:
             self.tools.register(CronTool(self.cron_service))
+
+    def _register_web_search_tool_initial(self) -> None:
+        if self._prefer_exa_mcp_web_search:
+            logger.info("Exa MCP detected; deferring built-in web_search registration until MCP connects")
+            return
+        self._register_brave_web_search_fallback()
+
+    def _register_brave_web_search_fallback(self) -> None:
+        if self.tools.has("web_search"):
+            return
+        if self.brave_api_key:
+            self.tools.register(WebSearchTool(api_key=self.brave_api_key))
+            logger.info("Registered built-in web_search (Brave Search API)")
+            return
+        logger.info("BRAVE_API_KEY not set; skipping built-in web_search tool")
+
+    def _install_exa_web_search_alias_if_available(self) -> bool:
+        wrapped = install_exa_web_search_alias(self.tools)
+        if not wrapped:
+            return False
+        logger.info("Registered web_search compatibility alias -> {}", wrapped)
+        return True
 
     async def _connect_mcp(self) -> None:
         """Connect to configured MCP servers (one-time, lazy)."""
@@ -126,9 +155,17 @@ class AgentLoop:
             self._mcp_stack = AsyncExitStack()
             await self._mcp_stack.__aenter__()
             await connect_mcp_servers(self._mcp_servers, self.tools, self._mcp_stack)
+            if self._prefer_exa_mcp_web_search:
+                if not self._install_exa_web_search_alias_if_available():
+                    logger.warning(
+                        "Exa MCP configured but 'web_search_exa' tool not found; falling back to built-in web_search"
+                    )
+                    self._register_brave_web_search_fallback()
             self._mcp_connected = True
         except Exception as e:
             logger.error("Failed to connect MCP servers (will retry next message): {}", e)
+            if self._prefer_exa_mcp_web_search:
+                self._register_brave_web_search_fallback()
             if self._mcp_stack:
                 try:
                     await self._mcp_stack.aclose()
