@@ -576,7 +576,27 @@ Simply send the command above to your nanobot (via CLI or any chat channel), and
 
 Config file: `~/.nanobot/config.json`
 
-### Providers
+### Tool & skill control (optional)
+
+You can keep the framework unchanged and only tune tool/skill availability:
+
+```json
+{
+  "tools": {
+    "enabled": ["read_file", "write_file", "edit_file", "list_dir", "exec", "web_fetch", "message", "spawn", "cron"]
+  },
+  "skills": {
+    "disabled": ["github", "tmux", "summarize", "clawhub"]
+  }
+}
+```
+
+Notes:
+- `tools.enabled` empty (default) means all built-in tools are enabled.
+- `web_search` now requires `tools.web.search.apiKey`; otherwise it is skipped at startup.
+- `skills.disabled` hides selected skills from the agent context.
+
+## Providers
 
 > [!TIP]
 > - **Groq** provides free voice transcription via Whisper. If configured, Telegram voice messages will be automatically transcribed.

@@ -268,8 +268,15 @@ class ToolsConfig(Base):
 
     web: WebToolsConfig = Field(default_factory=WebToolsConfig)
     exec: ExecToolConfig = Field(default_factory=ExecToolConfig)
+    enabled: list[str] = Field(default_factory=list)  # Empty means all built-in tools enabled
     restrict_to_workspace: bool = False  # If true, restrict all tool access to workspace directory
     mcp_servers: dict[str, MCPServerConfig] = Field(default_factory=dict)
+
+
+class SkillsConfig(Base):
+    """Skills configuration."""
+
+    disabled: list[str] = Field(default_factory=list)  # Skill names to hide from agent context
 
 
 class Config(BaseSettings):
@@ -280,6 +287,7 @@ class Config(BaseSettings):
     providers: ProvidersConfig = Field(default_factory=ProvidersConfig)
     gateway: GatewayConfig = Field(default_factory=GatewayConfig)
     tools: ToolsConfig = Field(default_factory=ToolsConfig)
+    skills: SkillsConfig = Field(default_factory=SkillsConfig)
 
     @property
     def workspace_path(self) -> Path:

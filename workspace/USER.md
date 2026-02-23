@@ -1,49 +1,38 @@
 # User Profile
 
-Information about the user to help personalize interactions.
+用于个人化配置（已按中文开发场景预设，可继续改）。
 
-## Basic Information
+## 基本信息
 
-- **Name**: (your name)
-- **Timezone**: (your timezone, e.g., UTC+8)
-- **Language**: (preferred language)
+- **Name**: （你的称呼）
+- **Timezone**: Asia/Shanghai
+- **Language**: 简体中文
 
-## Preferences
+## 沟通偏好
 
-### Communication Style
+- [x] Professional（专业）
+- [x] Technical（技术向）
+- [x] Adaptive based on question（按问题复杂度调整详略）
 
-- [ ] Casual
-- [ ] Professional
-- [ ] Technical
+## 响应风格
 
-### Response Length
+- [x] 先结论后细节
+- [x] 命令行示例可直接复制
+- [x] 复杂修改附带风险提示
 
-- [ ] Brief and concise
-- [ ] Detailed explanations
-- [ ] Adaptive based on question
-
-### Technical Level
+## 技术水平
 
 - [ ] Beginner
-- [ ] Intermediate
-- [ ] Expert
+- [x] Intermediate
+- [x] Expert
 
-## Work Context
+## 工作上下文
 
-- **Primary Role**: (your role, e.g., developer, researcher)
-- **Main Projects**: (what you're working on)
-- **Tools You Use**: (IDEs, languages, frameworks)
+- **Primary Role**: 个人化二次开发（AI Agent / 工具链）
+- **Main Projects**: nanobot 定制与自动化工作流
+- **Tools You Use**: Python, Shell, Git, Docker
 
-## Topics of Interest
+## 特别指令
 
-- 
-- 
-- 
-
-## Special Instructions
-
-(Any specific instructions for how the assistant should behave)
-
----
-
-*Edit this file to customize nanobot's behavior for your needs.*
+- 未确认需求边界时，先给“最小可行改动(MVP)”方案。
+- 优先保留现有框架，只改配置、工具策略和技能策略。

@@ -37,6 +37,7 @@ class SubagentManager:
         brave_api_key: str | None = None,
         exec_config: "ExecToolConfig | None" = None,
         restrict_to_workspace: bool = False,
+        enabled_tools: list[str] | None = None,
     ):
         from nanobot.config.schema import ExecToolConfig
         self.provider = provider
@@ -48,8 +49,13 @@ class SubagentManager:
         self.brave_api_key = brave_api_key
         self.exec_config = exec_config or ExecToolConfig()
         self.restrict_to_workspace = restrict_to_workspace
+        self.enabled_tools = {t.lower() for t in (enabled_tools or [])}
         self._running_tasks: dict[str, asyncio.Task[None]] = {}
     
+    def _tool_enabled(self, name: str) -> bool:
+        """Return True if tool is enabled by config (empty list means allow all)."""
+        return not self.enabled_tools or name.lower() in self.enabled_tools
+
     async def spawn(
         self,
         task: str,
@@ -103,17 +109,24 @@ class SubagentManager:
             # Build subagent tools (no message tool, no spawn tool)
             tools = ToolRegistry()
             allowed_dir = self.workspace if self.restrict_to_workspace else None
-            tools.register(ReadFileTool(workspace=self.workspace, allowed_dir=allowed_dir))
-            tools.register(WriteFileTool(workspace=self.workspace, allowed_dir=allowed_dir))
-            tools.register(EditFileTool(workspace=self.workspace, allowed_dir=allowed_dir))
-            tools.register(ListDirTool(workspace=self.workspace, allowed_dir=allowed_dir))
-            tools.register(ExecTool(
-                working_dir=str(self.workspace),
-                timeout=self.exec_config.timeout,
-                restrict_to_workspace=self.restrict_to_workspace,
-            ))
-            tools.register(WebSearchTool(api_key=self.brave_api_key))
-            tools.register(WebFetchTool())
+            if self._tool_enabled("read_file"):
+                tools.register(ReadFileTool(workspace=self.workspace, allowed_dir=allowed_dir))
+            if self._tool_enabled("write_file"):
+                tools.register(WriteFileTool(workspace=self.workspace, allowed_dir=allowed_dir))
+            if self._tool_enabled("edit_file"):
+                tools.register(EditFileTool(workspace=self.workspace, allowed_dir=allowed_dir))
+            if self._tool_enabled("list_dir"):
+                tools.register(ListDirTool(workspace=self.workspace, allowed_dir=allowed_dir))
+            if self._tool_enabled("exec"):
+                tools.register(ExecTool(
+                    working_dir=str(self.workspace),
+                    timeout=self.exec_config.timeout,
+                    restrict_to_workspace=self.restrict_to_workspace,
+                ))
+            if self._tool_enabled("web_search") and self.brave_api_key:
+                tools.register(WebSearchTool(api_key=self.brave_api_key))
+            if self._tool_enabled("web_fetch"):
+                tools.register(WebFetchTool())
             
             # Build messages with subagent-specific prompt
             system_prompt = self._build_subagent_prompt(task)
