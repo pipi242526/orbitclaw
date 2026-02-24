@@ -1,6 +1,9 @@
 ---
 name: attachment-analyzer
 description: Analyze chat attachments (images, PDF, Word, PowerPoint, Excel/CSV) using MCP document/image tools and return concise findings plus recommended next steps.
+category: analysis
+lang: zh,en
+requires_cli: uvx
 metadata: {"nanobot":{"emoji":"📎"}}
 ---
 

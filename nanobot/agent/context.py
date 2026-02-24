@@ -102,6 +102,10 @@ For normal conversation, just respond with text - do not call the message tool.
 
 Always be helpful, accurate, and concise. Before calling tools, briefly tell the user what you're about to do (one short sentence in the user's language).
 If you need to use tools, call them directly — never send a preliminary message like "Let me check" without actually calling a tool.
+Attachment routing (prefer lightweight tools first):
+- Images/screenshots/photos: use `image_read` if available (or model vision if already attached inline)
+- PDF/Word/PPT/Excel and other documents: use `doc_read` if available
+- Web pages/articles/docs: try `web_fetch` first; only switch to enhanced MCP fetch/browser tools when built-in extraction fails
 When remembering something important, write to {workspace_path}/memory/MEMORY.md
 To recall past events, grep {workspace_path}/memory/HISTORY.md"""
     
@@ -163,17 +167,30 @@ To recall past events, grep {workspace_path}/memory/HISTORY.md"""
             return text
         
         images = []
+        non_image_attachments: list[str] = []
         for path in media:
             p = Path(path)
             mime, _ = mimetypes.guess_type(path)
-            if not p.is_file() or not mime or not mime.startswith("image/"):
+            if not p.is_file():
+                continue
+            if not mime or not mime.startswith("image/"):
+                non_image_attachments.append(str(p))
                 continue
             b64 = base64.b64encode(p.read_bytes()).decode()
             images.append({"type": "image_url", "image_url": {"url": f"data:{mime};base64,{b64}"}})
-        
+
+        attachment_hint = ""
+        if non_image_attachments:
+            lines = "\n".join(f"- {p}" for p in non_image_attachments)
+            attachment_hint = (
+                "\n\nAttached local files (non-image):\n"
+                f"{lines}\n"
+                "Use `doc_read` when available to parse these files."
+            )
+
         if not images:
-            return text
-        return images + [{"type": "text", "text": text}]
+            return text + attachment_hint
+        return images + [{"type": "text", "text": text + attachment_hint}]
     
     def add_tool_result(
         self,

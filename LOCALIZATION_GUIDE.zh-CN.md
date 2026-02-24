@@ -9,15 +9,18 @@
 - `tools.enabled`：内置工具白名单（空列表表示全部启用）
 - `tools.aliases`：工具别名映射（`alias -> target`），支持内置工具和 MCP 工具
 - `tools.web.search.provider`：搜索后端选择（`auto | brave | exa_mcp | disabled`）
+- `profiles.active` + `profiles.items`：场景配置档（`cn_dev / research / offline`）
 - `tools.mcpServers`：配置 MCP 服务器
 - `tools.mcpEnabledServers` / `tools.mcpDisabledServers`：MCP 服务端过滤
 - `tools.mcpEnabledTools` / `tools.mcpDisabledTools`：MCP 工具过滤（支持原名 / 包装名 / `server.tool`）
 - `skills.disabled`：技能黑名单（从上下文隐藏）
+- 技能元信息识别：`requires_cli / requires_env / requires_network / category / lang`
 
 另外：
 
 - `web_search` 已支持 Exa MCP 兼容别名（主代理 + 子代理）
 - `nanobot status` 已增强工具/技能诊断（缺 API key、MCP 命令缺失、过滤状态等）
+- `nanobot doctor` 已支持修复导向诊断（问题原因 + 修复建议）
 
 ## 2. 当前内置工具盘点（Built-in Tools）
 
@@ -184,6 +187,24 @@
 - 后续若有明确动态网页操作需求，再增加 Playwright MCP（按 profile 启用）
 - 做法：先新增 MCP 工具，再用 `tools.aliases` 暴露 `web_fetch_plus`，观察使用频率后再决定是否替换默认 `web_fetch`
 
+轻量示例（推荐先保留内置 `web_fetch`）：
+
+```json
+{
+  "tools": {
+    "aliases": {
+      "web_fetch_plus": "mcp_fetch_fetch"
+    }
+  }
+}
+```
+
+路由建议：
+
+- 先 `web_fetch`
+- 失败/内容缺失再 `web_fetch_plus`
+- 仍不行再考虑 Playwright 类工具（不要默认常开）
+
 ### 5.2 优先新增：代码与文档类 MCP
 
 1. 文档/知识检索 MCP
@@ -209,25 +230,26 @@
 - 这些是框架核心能力，替换风险高、收益有限
 - 先做治理（白名单/别名/诊断/配置）性价比更高
 
-## 6. 技能治理建议（下一阶段）
+## 6. 技能治理（当前已支持 + 建议用法）
 
-### 6.1 从“黑名单”升级到“配置档（profiles）”
+### 6.1 使用 `profiles` 切换场景（已支持）
 
-建议新增概念（下一步可做）：
+当前分支已支持：
 
-- `profiles.cn_dev`
-- `profiles.offline`
-- `profiles.research`
+- `profiles.active`：当前生效 profile 名称
+- `profiles.items.<name>.tools`：工具相关覆盖项（作为默认值）
+- `profiles.items.<name>.skills`：技能相关覆盖项（作为默认值）
 
-每个 profile 包含：
+覆盖顺序（重要）：
 
-- `tools.enabled`
-- `tools.aliases`
-- `tools.web.search.provider`
-- `tools.mcp*` 过滤项
-- `skills.disabled`
+1. `profiles.items[active]` 先作为基础配置
+2. 顶层 `tools` / `skills` 再覆盖 profile（顶层优先）
 
-这样可以一键切换“开发/离线/调研”模式。
+这样你可以：
+
+- 用 profile 管理“场景基线”
+- 用顶层字段做个人常驻修正
+- 避免每次切场景都手工改很多字段
 
 ### 6.2 给技能增加可用性元信息（渐进式）
 
@@ -242,7 +264,24 @@
 - `category`
 - `lang`
 
-之后可让 `nanobot status` / `doctor` 直接显示“技能不可用原因”。
+当前已支持解析这些字段并用于自动隐藏/诊断（缺依赖时）；
+建议后续继续给新增技能补齐元信息，保证 `status` / `doctor` 输出更准确。
+
+## 6.3 `doctor` 命令（建议优先用来排障）
+
+```bash
+nanobot doctor
+```
+
+`doctor` 会优先检查：
+
+- 搜索后端是否可用（Exa / Brave）
+- `docloader` 是否缺 `uvx`
+- alias 配置是否无效
+- profile 是否引用了不存在的条目
+- 技能依赖是否缺失（例如 `gh`、`tmux`、`summarize`）
+
+适合你这种“工具和技能经常替换”的二开场景。
 
 ## 7. 从外部项目借鉴的设计点（适合 nanobot）
 
@@ -258,7 +297,7 @@
 
 3. OpenHands（集中设置入口）
 - 灵感：模型、代理行为、沙箱、外部服务统一放在设置面板/入口
-- 适合 nanobot：增强 `nanobot status` / 新增 `nanobot doctor`，把“缺什么、如何修”说清楚
+- 适合 nanobot：继续增强 `nanobot status` / `nanobot doctor`，把“缺什么、如何修”说清楚
 
 4. MCP 市场/注册表（发现与安装体验）
 - 灵感：把“可用 MCP 工具”从 scattered README 变成可搜索目录
@@ -269,15 +308,16 @@
 1. 做 `tools.aliases` 的高阶能力（已支持基础版）
 - 可考虑支持 alias chain 检测、冲突策略、只读别名标记
 
-2. 新增 `nanobot doctor`
-- 重点输出：
+2. 继续增强 `nanobot doctor`
+- 重点输出（下一阶段）：
 - API key 缺失
 - CLI 缺失（`gh`、`tmux`、`summarize` 等）
 - MCP server 不可达 / 被过滤
 - 技能依赖不满足
 
-3. 做 `profiles`
-- 这是你“本土化二开”的关键效率工具
+3. 继续完善 `profiles`
+- 当前已支持 `active + items`
+- 下一步可补 profile 切换命令/模板导出
 
 4. 再做工具替换/新增
 - 优先：搜索、网页抽取、文档检索

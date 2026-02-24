@@ -855,10 +855,34 @@ You can also alias MCP tools to stable names used by your prompts:
 }
 ```
 
+Profiles can provide reusable tool/skill baselines (e.g. `cn_dev`, `research`, `offline`) while keeping top-level `tools` / `skills` as explicit overrides:
+
+```json
+{
+  "profiles": {
+    "active": "cn_dev",
+    "items": {
+      "cn_dev": {
+        "tools": {
+          "web": {
+            "search": { "provider": "exa_mcp" }
+          }
+        },
+        "skills": {
+          "disabled": ["clawhub", "tmux", "summarize", "weather"]
+        }
+      }
+    }
+  }
+}
+```
+
 For file/image attachment workflows, a lightweight pattern is:
 - keep built-in `web_fetch` for basic web pages
 - add a document/image MCP server (PDF/DOCX/XLSX/PPTX/images)
 - alias its tools to stable names like `doc_read` / `image_read`
+
+For enhanced web extraction without replacing the default path, add an optional MCP fetch tool and alias it as `web_fetch_plus`, then use it only when built-in `web_fetch` fails on a page.
 
 #### Use Exa MCP as `web_search` (Brave replacement)
 
@@ -915,6 +939,7 @@ Notes:
 | `nanobot agent --logs` | Show runtime logs during chat |
 | `nanobot gateway` | Start the gateway |
 | `nanobot status` | Show status |
+| `nanobot doctor` | Diagnose config/tool/skill issues and suggest fixes |
 | `nanobot provider login openai-codex` | OAuth login for providers |
 | `nanobot channels login` | Link WhatsApp (scan QR) |
 | `nanobot channels status` | Show channel status |

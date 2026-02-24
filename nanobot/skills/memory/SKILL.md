@@ -2,6 +2,8 @@
 name: memory
 description: Two-layer memory system with grep-based recall.
 always: true
+category: core
+lang: en
 ---
 
 # Memory

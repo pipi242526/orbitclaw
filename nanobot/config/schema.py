@@ -285,6 +285,20 @@ class SkillsConfig(Base):
     disabled: list[str] = Field(default_factory=list)  # Skill names to hide from agent context
 
 
+class ProfileOverridesConfig(Base):
+    """Named profile overrides for tool/skill preferences."""
+
+    tools: dict = Field(default_factory=dict)   # Partial `tools` config; merged before top-level overrides
+    skills: dict = Field(default_factory=dict)  # Partial `skills` config; merged before top-level overrides
+
+
+class ProfilesConfig(Base):
+    """Profiles let users switch tool/skill presets without editing many fields."""
+
+    active: str = ""  # Name of active profile in `profiles.items`
+    items: dict[str, ProfileOverridesConfig] = Field(default_factory=dict)
+
+
 class Config(BaseSettings):
     """Root configuration for nanobot."""
 
@@ -294,6 +308,7 @@ class Config(BaseSettings):
     gateway: GatewayConfig = Field(default_factory=GatewayConfig)
     tools: ToolsConfig = Field(default_factory=ToolsConfig)
     skills: SkillsConfig = Field(default_factory=SkillsConfig)
+    profiles: ProfilesConfig = Field(default_factory=ProfilesConfig)
 
     @property
     def workspace_path(self) -> Path:

@@ -1,6 +1,8 @@
 ---
 name: cron
 description: Schedule reminders and recurring tasks.
+category: automation
+lang: en
 ---
 
 # Cron

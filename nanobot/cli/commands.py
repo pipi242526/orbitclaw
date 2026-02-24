@@ -20,7 +20,7 @@ from prompt_toolkit.history import FileHistory
 from prompt_toolkit.patch_stdout import patch_stdout
 
 from nanobot import __version__, __logo__
-from nanobot.config.schema import Config, MCPServerConfig
+from nanobot.config.schema import Config, MCPServerConfig, ProfileOverridesConfig
 
 app = typer.Typer(
     name="nanobot",
@@ -78,6 +78,26 @@ def _apply_recommended_tool_defaults(config: Config) -> None:
     tools.aliases.setdefault("code_search", "mcp_exa_get_code_context_exa")
     tools.aliases.setdefault("doc_read", "mcp_docloader_read_document")
     tools.aliases.setdefault("image_read", "mcp_docloader_read_image")
+
+    # Seed lightweight usage profiles; users can switch by setting profiles.active.
+    profiles = config.profiles
+    if "cn_dev" not in profiles.items:
+        profiles.items["cn_dev"] = ProfileOverridesConfig(
+            tools={"web": {"search": {"provider": "exa_mcp"}}},
+            skills={"disabled": ["clawhub", "tmux", "summarize", "weather"]},
+        )
+    if "research" not in profiles.items:
+        profiles.items["research"] = ProfileOverridesConfig(
+            tools={"web": {"search": {"provider": "exa_mcp"}}},
+            skills={"disabled": ["clawhub", "tmux"]},
+        )
+    if "offline" not in profiles.items:
+        profiles.items["offline"] = ProfileOverridesConfig(
+            tools={"web": {"search": {"provider": "disabled"}}},
+            skills={"disabled": ["clawhub", "weather"]},
+        )
+    if not profiles.active:
+        profiles.active = "cn_dev"
 
 
 def _flush_pending_tty_input() -> None:
@@ -214,7 +234,7 @@ def onboard():
             save_config(config)
             console.print(f"[green]✓[/green] Config reset to defaults at {config_path}")
         else:
-            config = load_config()
+            config = load_config(apply_profiles=False)
             _apply_recommended_tool_defaults(config)
             save_config(config)
             console.print(f"[green]✓[/green] Config refreshed at {config_path} (existing values preserved)")
@@ -252,40 +272,77 @@ def _create_workspace_templates(workspace: Path):
     templates = {
         "AGENTS.md": """# Agent Instructions
 
-You are a helpful AI assistant. Be concise, accurate, and friendly.
+Follow a lightweight, tool-governed workflow.
 
-## Guidelines
+## Working Style
 
-- Always explain what you're doing before taking actions
-- Ask for clarification when the request is ambiguous
-- Use tools to help accomplish tasks
-- Remember important information in memory/MEMORY.md; past events are logged in memory/HISTORY.md
+- Reply directly first, then use tools when they materially improve accuracy
+- Before using tools, say one short sentence about what you are going to do
+- Prefer the simplest tool that solves the task (avoid heavy tools by default)
+- When a dependency is missing, explain the blocker and propose the smallest fix
+
+## Tool Routing (Default)
+
+- Search: use `web_search` (configured backend may be Exa MCP or Brave)
+- Web pages/docs: try `web_fetch` first; only escalate to enhanced MCP/browser tools if needed
+- Images/screenshots: use `image_read` when available
+- PDF/Word/PPT/Excel/CSV: use `doc_read` when available
+
+## Memory
+
+- Persistent facts: `memory/MEMORY.md`
+- Event history: `memory/HISTORY.md` (append-only, grep-searchable)
 """,
         "SOUL.md": """# Soul
 
-I am nanobot, a lightweight AI assistant.
+I am nanobot: practical, transparent, and efficient.
 
 ## Personality
 
-- Helpful and friendly
-- Concise and to the point
-- Curious and eager to learn
+- Calm and direct
+- Accuracy-first
+- Tool-aware (prefer lightweight paths before complex ones)
 
-## Values
+## Operating Principles
 
-- Accuracy over speed
-- User privacy and safety
-- Transparency in actions
+- Keep the project maintainable
+- Prefer configuration over hardcoded behavior
+- Fail clearly (say what is missing and how to fix it)
+- Make upgrades reversible (profiles, aliases, filters)
 """,
         "USER.md": """# User
 
-Information about the user goes here.
+Record stable preferences and collaboration habits here.
 
-## Preferences
+## Suggested Fields
 
-- Communication style: (casual/formal)
-- Timezone: (your timezone)
-- Language: (your preferred language)
+- Preferred language: Chinese / English / mixed
+- Timezone: (e.g. Asia/Shanghai)
+- Coding style preferences
+- Risk tolerance (fast iteration vs safer changes)
+- Common workflows (research / coding / ops / review)
+""",
+        "TOOLS.md": """# Tools & Skills Policy
+
+This workspace uses a lightweight default setup.
+
+## Core Built-in Tools (usually keep enabled)
+
+- `read_file`, `write_file`, `edit_file`, `list_dir`, `exec`
+- `web_search`, `web_fetch`
+- `message`, `spawn`
+
+## Optional MCP Enhancements
+
+- Exa MCP: web search and code/document search context
+- Document loader MCP: `doc_read` / `image_read` for attachments
+- Optional web fetch enhancement MCP (enable only when built-in `web_fetch` fails)
+
+## Skills Strategy
+
+- Keep always-useful skills enabled (e.g. memory, cron, github if `gh` exists)
+- Hide skills that lack local dependencies
+- Prefer profiles to switch bundles instead of editing many fields manually
 """,
     }
     
@@ -1073,6 +1130,7 @@ def cron_run(
 def status():
     """Show nanobot status."""
     from nanobot.config.loader import load_config, get_config_path
+    from nanobot.agent.skills import SkillsLoader
     from nanobot.agent.tools.web import has_exa_search_mcp
 
     config_path = get_config_path()
@@ -1107,6 +1165,16 @@ def status():
                 console.print(f"{spec.label}: {'[green]✓[/green]' if has_key else '[dim]not set[/dim]'}")
 
         console.print("\n[bold]Tool & Skill Diagnostics[/bold]")
+        active_profile = (config.profiles.active or "").strip()
+        if active_profile:
+            profile_ok = active_profile in config.profiles.items
+            console.print(
+                f"Profile: {active_profile} "
+                f"{'[green]✓[/green]' if profile_ok else '[red](missing definition)[/red]'} "
+                f"({len(config.profiles.items)} defined)"
+            )
+        elif config.profiles.items:
+            console.print(f"Profile: [dim]none active[/dim] ({len(config.profiles.items)} defined)")
 
         builtins = config.tools.enabled or ["(all built-in tools enabled)"]
         console.print(f"Built-in tools: {', '.join(builtins)}")
@@ -1127,6 +1195,19 @@ def status():
         console.print(
             f"Disabled skills: {', '.join(disabled_skills) if disabled_skills else '[dim]none[/dim]'}"
         )
+        skill_loader = SkillsLoader(workspace, disabled_skills=set(disabled_skills))
+        skill_report = skill_loader.build_availability_report()
+        unavailable_skills = [s for s in skill_report if not bool(s["available"])]
+        if skill_report:
+            console.print(
+                f"Skill availability: {len(skill_report) - len(unavailable_skills)}/{len(skill_report)} ready"
+            )
+            if unavailable_skills[:5]:
+                for s in unavailable_skills[:5]:
+                    reason = s.get("requires") or "requirements missing"
+                    console.print(f"  - {s['name']}: [dim]{reason}[/dim]")
+                if len(unavailable_skills) > 5:
+                    console.print(f"  [dim]... {len(unavailable_skills) - 5} more unavailable skills[/dim]")
 
         provider_mode = (config.tools.web.search.provider or "auto").strip().lower()
         if provider_mode not in {"auto", "brave", "exa_mcp", "disabled"}:
@@ -1247,6 +1328,107 @@ def status():
             console.print("[yellow]Warnings:[/yellow]")
             for item in warnings:
                 console.print(f"  - {item}")
+
+
+@app.command()
+def doctor():
+    """Diagnose configuration/tooling issues and suggest fixes."""
+    from nanobot.config.loader import load_config, get_config_path
+    from nanobot.agent.skills import SkillsLoader
+
+    config_path = get_config_path()
+    config = load_config()
+    workspace = config.workspace_path
+
+    console.print(f"{__logo__} nanobot Doctor\n")
+    console.print("[bold]Summary[/bold]")
+    console.print(f"- Config path: {config_path} ({'exists' if config_path.exists() else 'missing'})")
+    console.print(f"- Workspace: {workspace} ({'exists' if workspace.exists() else 'missing'})")
+    console.print(f"- Active profile: {config.profiles.active or 'none'}")
+
+    findings: list[tuple[str, str, str]] = []  # severity, problem, fix
+
+    active_profile = (config.profiles.active or "").strip()
+    if active_profile and active_profile not in config.profiles.items:
+        findings.append((
+            "warn",
+            f"profiles.active='{active_profile}' but no matching definition in profiles.items",
+            "Add profiles.items.<name> or clear profiles.active to disable profile overlay.",
+        ))
+
+    provider_mode = (config.tools.web.search.provider or "auto").strip().lower()
+    brave_ready = bool(config.tools.web.search.api_key)
+    exa_cfg = config.tools.mcp_servers.get("exa")
+    if provider_mode == "exa_mcp" and not exa_cfg:
+        findings.append((
+            "error",
+            "web search provider is exa_mcp but MCP server 'exa' is not configured",
+            "Add tools.mcpServers.exa.url = https://mcp.exa.ai/mcp?tools=web_search_exa,get_code_context_exa",
+        ))
+    if provider_mode == "brave" and not brave_ready:
+        findings.append((
+            "error",
+            "web search provider is brave but tools.web.search.apiKey is empty",
+            "Set tools.web.search.apiKey (Brave Search API key) or switch provider to exa_mcp/auto.",
+        ))
+    if provider_mode == "auto" and not brave_ready and not exa_cfg:
+        findings.append((
+            "warn",
+            "web search is effectively unavailable (no Brave API key, no Exa MCP)",
+            "Configure Exa MCP (recommended) or set tools.web.search.apiKey for Brave.",
+        ))
+
+    doc_cfg = config.tools.mcp_servers.get("docloader")
+    if doc_cfg:
+        if doc_cfg.command and shutil.which(doc_cfg.command) is None:
+            findings.append((
+                "error",
+                f"docloader MCP command '{doc_cfg.command}' not found",
+                "Install uv (e.g. `brew install uv`) so `uvx` can launch the document loader MCP.",
+            ))
+    else:
+        findings.append((
+            "warn",
+            "document parsing MCP is not configured (PDF/Word/PPT/Excel/image parsing will rely on limited built-ins)",
+            "Add tools.mcpServers.docloader (uvx awslabs.document-loader-mcp-server@latest) and aliases doc_read/image_read.",
+        ))
+
+    if config.tools.aliases:
+        for alias_name, target_name in config.tools.aliases.items():
+            a = str(alias_name).strip()
+            t = str(target_name).strip()
+            if not a or not t:
+                findings.append(("warn", f"invalid tool alias entry: {alias_name!r} -> {target_name!r}", "Remove empty alias keys/values."))
+            elif a == t:
+                findings.append(("warn", f"noop tool alias: {a} -> {t}", "Delete the alias or point it to a different target tool."))
+
+    # Skills availability diagnosis (respects explicit disabled list).
+    disabled_skills = set(config.skills.disabled or [])
+    loader = SkillsLoader(workspace, disabled_skills=disabled_skills)
+    for row in loader.build_availability_report():
+        if bool(row["available"]):
+            continue
+        reason = str(row.get("requires") or "requirements missing")
+        fix = "Install the missing CLI/env requirement or add the skill to skills.disabled."
+        if "CLI: gh" in reason:
+            fix = "Install GitHub CLI (`brew install gh`) and run `gh auth login`, or disable the github skill."
+        elif "CLI: uvx" in reason or "CLI: uv" in reason:
+            fix = "Install uv (`brew install uv`) to enable document/tool MCP skills."
+        findings.append(("warn", f"skill '{row['name']}' unavailable: {reason}", fix))
+
+    console.print("\n[bold]Findings[/bold]")
+    if not findings:
+        console.print("[green]No blocking issues found.[/green]")
+    else:
+        for severity, problem, fix in findings:
+            color = "red" if severity == "error" else "yellow"
+            console.print(f"- [{color}]{severity.upper()}[/{color}] {problem}")
+            console.print(f"  Fix: {fix}")
+
+    console.print("\n[bold]Recommended next actions[/bold]")
+    console.print("1. Run `nanobot onboard` to refresh config and workspace templates with current defaults.")
+    console.print("2. Keep `profiles.active=cn_dev` for lightweight local use; switch to `research` when you need more tools.")
+    console.print("3. Test attachments with `doc_read` / `image_read` after enabling docloader MCP.")
 
 
 # ============================================================================
