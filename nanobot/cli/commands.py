@@ -20,7 +20,7 @@ from prompt_toolkit.history import FileHistory
 from prompt_toolkit.patch_stdout import patch_stdout
 
 from nanobot import __version__, __logo__
-from nanobot.config.schema import Config
+from nanobot.config.schema import Config, MCPServerConfig
 
 app = typer.Typer(
     name="nanobot",
@@ -37,6 +37,47 @@ EXIT_COMMANDS = {"exit", "quit", "/exit", "/quit", ":q"}
 
 _PROMPT_SESSION: PromptSession | None = None
 _SAVED_TERM_ATTRS = None  # original termios settings, restored on exit
+
+
+def _merge_unique(items: list[str], additions: list[str]) -> list[str]:
+    """Append strings while preserving order and removing duplicates."""
+    out: list[str] = []
+    for value in [*items, *additions]:
+        if value and value not in out:
+            out.append(value)
+    return out
+
+
+def _apply_recommended_tool_defaults(config: Config) -> None:
+    """Seed lightweight MCP/tool defaults for first-time users without overriding custom settings."""
+    tools = config.tools
+
+    # Prefer Exa MCP for search when still on default auto selection.
+    if not tools.web.search.provider or tools.web.search.provider == "auto":
+        tools.web.search.provider = "exa_mcp"
+
+    if "exa" not in tools.mcp_servers:
+        tools.mcp_servers["exa"] = MCPServerConfig(
+            url="https://mcp.exa.ai/mcp?tools=web_search_exa,get_code_context_exa"
+        )
+
+    if "docloader" not in tools.mcp_servers:
+        tools.mcp_servers["docloader"] = MCPServerConfig(
+            command="uvx",
+            args=["awslabs.document-loader-mcp-server@latest"],
+            env={"FASTMCP_LOG_LEVEL": "ERROR"},
+        )
+
+    tools.mcp_enabled_servers = _merge_unique(tools.mcp_enabled_servers, ["exa", "docloader"])
+    tools.mcp_enabled_tools = _merge_unique(
+        tools.mcp_enabled_tools,
+        ["web_search_exa", "get_code_context_exa", "read_document", "read_image"],
+    )
+
+    # Keep built-in tool names stable while allowing direct calls to MCP-backed helpers.
+    tools.aliases.setdefault("code_search", "mcp_exa_get_code_context_exa")
+    tools.aliases.setdefault("doc_read", "mcp_docloader_read_document")
+    tools.aliases.setdefault("image_read", "mcp_docloader_read_image")
 
 
 def _flush_pending_tty_input() -> None:
@@ -169,14 +210,18 @@ def onboard():
         console.print("  [bold]N[/bold] = refresh config, keeping existing values and adding new fields")
         if typer.confirm("Overwrite?"):
             config = Config()
+            _apply_recommended_tool_defaults(config)
             save_config(config)
             console.print(f"[green]✓[/green] Config reset to defaults at {config_path}")
         else:
             config = load_config()
+            _apply_recommended_tool_defaults(config)
             save_config(config)
             console.print(f"[green]✓[/green] Config refreshed at {config_path} (existing values preserved)")
     else:
-        save_config(Config())
+        config = Config()
+        _apply_recommended_tool_defaults(config)
+        save_config(config)
         console.print(f"[green]✓[/green] Created config at {config_path}")
     
     # Create workspace
@@ -193,8 +238,11 @@ def onboard():
     console.print("\nNext steps:")
     console.print("  1. Add your API key to [cyan]~/.nanobot/config.json[/cyan]")
     console.print("     Get one at: https://openrouter.ai/keys")
-    console.print("  2. Chat: [cyan]nanobot agent -m \"Hello!\"[/cyan]")
-    console.print("\n[dim]Want Telegram/WhatsApp? See: https://github.com/HKUDS/nanobot#-chat-apps[/dim]")
+    console.print("  2. Optional: install [cyan]uv[/cyan] to enable document parser MCP ([cyan]uvx[/cyan])")
+    console.print("     Example: [cyan]brew install uv[/cyan]")
+    console.print("  3. Chat: [cyan]nanobot agent -m \"Hello!\"[/cyan]")
+    console.print("\n[dim]Default config now includes Exa MCP search and a docloader MCP template.[/dim]")
+    console.print("[dim]Want Telegram/WhatsApp? See: https://github.com/HKUDS/nanobot#-chat-apps[/dim]")
 
 
 
