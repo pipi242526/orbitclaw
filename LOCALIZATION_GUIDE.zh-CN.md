@@ -61,6 +61,21 @@
 
 ## 4. 推荐配置模板（以你当前方向为主）
 
+### 4.0 当前推荐栈（轻量优先，适合你的项目）
+
+我建议的默认选择（当前阶段）：
+
+- `web_search`：`exa_mcp`（你已确定）
+- `web_fetch` 增强方向：**Fetch/文档解析方向**（先不上 Playwright）
+- GitHub 能力：**保留 `github` skill + `gh` CLI**（最轻、最稳）
+- 附件分析：新增 `attachment-analyzer` skill（配合文档/图片 MCP）
+
+为什么不先上 Playwright：
+
+- 运行时更重（浏览器、依赖、维护成本）
+- 你当前更急的是聊天附件（图片/PDF/Word/PPT/表格）解析与反馈
+- 等明确出现“动态网页操作/表单自动化”刚需，再按 profile 增量启用
+
 ### 4.1 中文开发默认（Exa 搜索 + 精简技能）
 
 ```json
@@ -89,6 +104,52 @@
   }
 }
 ```
+
+### 4.1.1 中文开发默认（含附件解析 MCP，推荐）
+
+> 在 4.1 的基础上增加文档/图片解析能力（低臃肿高收益）。
+
+```json
+{
+  "tools": {
+    "enabled": ["read_file", "write_file", "edit_file", "list_dir", "exec", "web_search", "web_fetch", "message", "spawn"],
+    "web": {
+      "search": {
+        "provider": "exa_mcp"
+      }
+    },
+    "mcpServers": {
+      "exa": {
+        "url": "https://mcp.exa.ai/mcp?tools=web_search_exa,get_code_context_exa"
+      },
+      "docloader": {
+        "command": "uvx",
+        "args": ["awslabs.document-loader-mcp-server@latest"],
+        "env": {
+          "FASTMCP_LOG_LEVEL": "ERROR"
+        }
+      }
+    },
+    "mcpEnabledServers": ["exa", "docloader"],
+    "mcpEnabledTools": ["web_search_exa", "get_code_context_exa", "read_document", "read_image"],
+    "aliases": {
+      "web_search": "mcp_exa_web_search_exa",
+      "code_search": "mcp_exa_get_code_context_exa",
+      "doc_read": "mcp_docloader_read_document",
+      "image_read": "mcp_docloader_read_image"
+    }
+  },
+  "skills": {
+    "disabled": ["tmux", "clawhub", "summarize", "weather"]
+  }
+}
+```
+
+说明：
+
+- `docloader` 用于图片、PDF、Word、PPT、Excel 等附件解析
+- 使用 `doc_read` / `image_read` 别名可以保持稳定调用习惯
+- `github` skill 建议保留（依赖 `gh`，但比 GitHub MCP 更轻）
 
 ### 4.2 离线/受限环境（尽量不报错）
 
@@ -119,7 +180,8 @@
 
 2. `web_fetch`（建议增强，不一定完全替换）
 - 当前 `web_fetch` 基于 Readability，通用页面够用
-- 建议补充一个“结构化抓取”MCP（适合 JS 动态页面/深度抓取/批量抽取）
+- 当前阶段建议先补充“Fetch/文档解析类 MCP”（轻量）
+- 后续若有明确动态网页操作需求，再增加 Playwright MCP（按 profile 启用）
 - 做法：先新增 MCP 工具，再用 `tools.aliases` 暴露 `web_fetch_plus`，观察使用频率后再决定是否替换默认 `web_fetch`
 
 ### 5.2 优先新增：代码与文档类 MCP

@@ -855,6 +855,11 @@ You can also alias MCP tools to stable names used by your prompts:
 }
 ```
 
+For file/image attachment workflows, a lightweight pattern is:
+- keep built-in `web_fetch` for basic web pages
+- add a document/image MCP server (PDF/DOCX/XLSX/PPTX/images)
+- alias its tools to stable names like `doc_read` / `image_read`
+
 #### Use Exa MCP as `web_search` (Brave replacement)
 
 If you configure an Exa MCP server, nanobot will automatically map Exa's `web_search_exa` tool to the built-in `web_search` name (including subagents), so existing prompts and tool habits keep working.
