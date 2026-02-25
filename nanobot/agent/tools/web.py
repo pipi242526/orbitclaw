@@ -221,6 +221,46 @@ class WebFetchTool(Tool):
     def __init__(self, max_chars: int = 50000, max_download_bytes: int = 2_000_000):
         self.max_chars = max_chars
         self.max_download_bytes = max_download_bytes
+
+    @staticmethod
+    def _dump(payload: dict[str, Any]) -> str:
+        return json.dumps(payload, ensure_ascii=False)
+
+    @staticmethod
+    def _response_content_length(response: httpx.Response) -> int:
+        content_len_hdr = response.headers.get("content-length")
+        if (content_len_hdr or "").isdigit():
+            return int(content_len_hdr)
+        return len(response.content)
+
+    def _response_meta(self, request_url: str, response: httpx.Response) -> dict[str, Any]:
+        return {
+            "url": request_url,
+            "finalUrl": str(response.url),
+            "status": response.status_code,
+            "contentType": (response.headers.get("content-type", "") or "").lower(),
+            "contentLength": self._response_content_length(response),
+        }
+
+    def _preflight_error(self, meta: dict[str, Any]) -> dict[str, Any] | None:
+        content_len = int(meta.get("contentLength", 0) or 0)
+        ctype = str(meta.get("contentType", "") or "")
+
+        if content_len > self.max_download_bytes:
+            return {
+                "error": "response_too_large",
+                **meta,
+                "hint": f"Response is {content_len} bytes (> {self.max_download_bytes}). Narrow the URL or use a specialized tool.",
+            }
+
+        if self._is_binary_like_content(ctype):
+            return {
+                "error": "unsupported_binary_content",
+                **meta,
+                "hint": "Use doc_read for PDF/Office/image attachments, or download and parse with a document/image MCP tool.",
+            }
+
+        return None
     
     async def execute(self, url: str, extractMode: str = "markdown", maxChars: int | None = None, **kwargs: Any) -> str:
         from readability import Document
@@ -230,7 +270,7 @@ class WebFetchTool(Tool):
         # Validate URL before fetching
         is_valid, error_msg = _validate_url(url)
         if not is_valid:
-            return json.dumps({"error": f"URL validation failed: {error_msg}", "url": url}, ensure_ascii=False)
+            return self._dump({"error": f"URL validation failed: {error_msg}", "url": url})
 
         try:
             async with httpx.AsyncClient(
@@ -241,36 +281,9 @@ class WebFetchTool(Tool):
                 r = await client.get(url, headers={"User-Agent": USER_AGENT})
                 r.raise_for_status()
 
-            ctype = (r.headers.get("content-type", "") or "").lower()
-            content_len_hdr = r.headers.get("content-length")
-            content_len = int(content_len_hdr) if (content_len_hdr or "").isdigit() else len(r.content)
-
-            if content_len > self.max_download_bytes:
-                return json.dumps(
-                    {
-                        "error": "response_too_large",
-                        "url": url,
-                        "finalUrl": str(r.url),
-                        "status": r.status_code,
-                        "contentType": ctype,
-                        "contentLength": content_len,
-                        "hint": f"Response is {content_len} bytes (> {self.max_download_bytes}). Narrow the URL or use a specialized tool.",
-                    },
-                    ensure_ascii=False,
-                )
-
-            if self._is_binary_like_content(ctype):
-                return json.dumps(
-                    {
-                        "error": "unsupported_binary_content",
-                        "url": url,
-                        "finalUrl": str(r.url),
-                        "status": r.status_code,
-                        "contentType": ctype,
-                        "hint": "Use doc_read for PDF/Office/image attachments, or download and parse with a document/image MCP tool.",
-                    },
-                    ensure_ascii=False,
-                )
+            meta = self._response_meta(url, r)
+            if preflight_error := self._preflight_error(meta):
+                return self._dump(preflight_error)
 
             text, extractor, title = self._extract_text(r, extract_mode=extractMode, readability_document=Document)
             text = _normalize(text) if extractor != "json" else text
@@ -280,24 +293,19 @@ class WebFetchTool(Tool):
             if truncated:
                 text = text[:max_chars]
 
-            return json.dumps(
+            return self._dump(
                 {
-                    "url": url,
-                    "finalUrl": str(r.url),
-                    "status": r.status_code,
-                    "contentType": ctype,
-                    "contentLength": content_len,
+                    **meta,
                     "extractor": extractor,
                     "title": title,
                     "truncated": truncated,
                     "length": len(text),
                     "originalLength": original_length,
                     "text": text,
-                },
-                ensure_ascii=False,
+                }
             )
         except Exception as e:
-            return json.dumps({"error": str(e), "url": url}, ensure_ascii=False)
+            return self._dump({"error": str(e), "url": url})
 
     def _is_binary_like_content(self, content_type: str) -> bool:
         ctype = (content_type or "").lower()

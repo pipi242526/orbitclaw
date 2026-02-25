@@ -12,6 +12,16 @@ from loguru import logger
 from nanobot.bus.events import InboundMessage
 from nanobot.bus.queue import MessageBus
 from nanobot.providers.base import LLMProvider
+from nanobot.agent.tooling import (
+    is_mcp_server_enabled,
+    is_tool_enabled,
+    normalize_name_set,
+    normalize_tool_aliases,
+    normalize_web_search_provider,
+    should_allow_brave_web_search,
+    should_try_exa_mcp_search,
+    truncate_tool_output,
+)
 from nanobot.agent.tools.registry import ToolRegistry
 from nanobot.agent.tools.alias import install_tool_aliases
 from nanobot.agent.tools.filesystem import ReadFileTool, WriteFileTool, EditFileTool, ListDirTool
@@ -66,10 +76,10 @@ class SubagentManager:
         self.restrict_to_workspace = restrict_to_workspace
         self._mcp_servers = mcp_servers or {}
         self.web_search_provider = self._normalize_web_search_provider(web_search_provider)
-        self._mcp_enabled_servers = {s.lower() for s in (mcp_enabled_servers or [])}
-        self._mcp_disabled_servers = {s.lower() for s in (mcp_disabled_servers or [])}
-        self._mcp_enabled_tools = {s.lower() for s in (mcp_enabled_tools or [])}
-        self._mcp_disabled_tools = {s.lower() for s in (mcp_disabled_tools or [])}
+        self._mcp_enabled_servers = normalize_name_set(mcp_enabled_servers)
+        self._mcp_disabled_servers = normalize_name_set(mcp_disabled_servers)
+        self._mcp_enabled_tools = normalize_name_set(mcp_enabled_tools)
+        self._mcp_disabled_tools = normalize_name_set(mcp_disabled_tools)
         exa_candidates = {
             name: cfg
             for name, cfg in self._mcp_servers.items()
@@ -77,40 +87,29 @@ class SubagentManager:
         }
         self._exa_mcp_configured = has_exa_search_mcp(exa_candidates)
         self._prefer_exa_mcp_web_search = self._should_try_exa_mcp_search()
-        self.tool_aliases = {
-            str(k).strip(): str(v).strip()
-            for k, v in (tool_aliases or {}).items()
-            if str(k).strip() and str(v).strip()
-        }
-        self.enabled_tools = {t.lower() for t in (enabled_tools or [])}
+        self.tool_aliases = normalize_tool_aliases(tool_aliases)
+        self.enabled_tools = normalize_name_set(enabled_tools)
         self._running_tasks: dict[str, asyncio.Task[None]] = {}
     
     def _tool_enabled(self, name: str) -> bool:
-        """Return True if tool is enabled by config (empty list means allow all)."""
-        return not self.enabled_tools or name.lower() in self.enabled_tools
+        return is_tool_enabled(self.enabled_tools, name)
 
     def _mcp_server_enabled(self, name: str) -> bool:
-        lname = str(name).lower()
-        if self._mcp_enabled_servers and lname not in self._mcp_enabled_servers:
-            return False
-        if lname in self._mcp_disabled_servers:
-            return False
-        return True
+        return is_mcp_server_enabled(
+            name,
+            enabled_servers=self._mcp_enabled_servers,
+            disabled_servers=self._mcp_disabled_servers,
+        )
 
     @staticmethod
     def _normalize_web_search_provider(value: str | None) -> str:
-        mode = (value or "auto").strip().lower()
-        return mode if mode in {"auto", "brave", "exa_mcp", "disabled"} else "auto"
+        return normalize_web_search_provider(value)
 
     def _should_try_exa_mcp_search(self) -> bool:
-        if self.web_search_provider == "disabled":
-            return False
-        if self.web_search_provider == "brave":
-            return False
-        return self._exa_mcp_configured
+        return should_try_exa_mcp_search(self.web_search_provider, self._exa_mcp_configured)
 
     def _should_allow_brave_web_search(self) -> bool:
-        return self.web_search_provider in {"auto", "brave"}
+        return should_allow_brave_web_search(self.web_search_provider)
 
     async def spawn(
         self,
@@ -255,12 +254,12 @@ class SubagentManager:
                             args_str = json.dumps(tool_call.arguments, ensure_ascii=False)
                             logger.debug("Subagent [{}] executing: {} with arguments: {}", task_id, tool_call.name, args_str)
                             result = await tools.execute(tool_call.name, tool_call.arguments)
-                            if isinstance(result, str) and len(result) > self._TOOL_RESULT_MAX_CHARS:
-                                omitted = len(result) - self._TOOL_RESULT_MAX_CHARS
-                                result = (
-                                    result[:self._TOOL_RESULT_MAX_CHARS]
-                                    + f"\n\n[truncated by nanobot subagent: {omitted} chars omitted to control context size]"
-                                )
+                            result = truncate_tool_output(
+                                result,
+                                tool_call.name,
+                                limit=self._TOOL_RESULT_MAX_CHARS,
+                                source_label="nanobot subagent",
+                            )
                             messages.append({
                                 "role": "tool",
                                 "tool_call_id": tool_call.id,

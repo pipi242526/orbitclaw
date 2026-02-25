@@ -15,6 +15,16 @@ from loguru import logger
 from nanobot.agent.context import ContextBuilder
 from nanobot.agent.memory import MemoryStore
 from nanobot.agent.subagent import SubagentManager
+from nanobot.agent.tooling import (
+    is_mcp_server_enabled,
+    is_tool_enabled,
+    normalize_name_set,
+    normalize_tool_aliases,
+    normalize_web_search_provider,
+    should_allow_brave_web_search,
+    should_try_exa_mcp_search,
+    truncate_tool_output,
+)
 from nanobot.agent.tools.cron import CronTool
 from nanobot.agent.tools.alias import install_tool_aliases
 from nanobot.agent.tools.filesystem import EditFileTool, ListDirTool, ReadFileTool, WriteFileTool
@@ -91,23 +101,20 @@ class AgentLoop:
         self.exec_config = exec_config or ExecToolConfig()
         self.cron_service = cron_service
         self.restrict_to_workspace = restrict_to_workspace
-        self.enabled_tools = {t.lower() for t in (enabled_tools or [])}
-        self.disabled_skills = {s.lower() for s in (disabled_skills or [])}
-        self.web_search_provider = self._normalize_web_search_provider(web_search_provider)
-        self.tool_aliases = {
-            str(k).strip(): str(v).strip()
-            for k, v in (tool_aliases or {}).items()
-            if str(k).strip() and str(v).strip()
-        }
+        self.enabled_tools = normalize_name_set(enabled_tools)
+        self.disabled_skills = normalize_name_set(disabled_skills)
+        self.web_search_provider = normalize_web_search_provider(web_search_provider)
+        self.tool_aliases = normalize_tool_aliases(tool_aliases)
 
         self.context = ContextBuilder(workspace, disabled_skills=self.disabled_skills)
         self.sessions = session_manager or SessionManager(workspace)
+        self.memory_store = MemoryStore(workspace)
         self.tools = ToolRegistry()
         self._mcp_servers = mcp_servers or {}
-        self._mcp_enabled_servers = {s.lower() for s in (mcp_enabled_servers or [])}
-        self._mcp_disabled_servers = {s.lower() for s in (mcp_disabled_servers or [])}
-        self._mcp_enabled_tools = {s.lower() for s in (mcp_enabled_tools or [])}
-        self._mcp_disabled_tools = {s.lower() for s in (mcp_disabled_tools or [])}
+        self._mcp_enabled_servers = normalize_name_set(mcp_enabled_servers)
+        self._mcp_disabled_servers = normalize_name_set(mcp_disabled_servers)
+        self._mcp_enabled_tools = normalize_name_set(mcp_enabled_tools)
+        self._mcp_disabled_tools = normalize_name_set(mcp_disabled_tools)
         exa_candidates = {
             name: cfg
             for name, cfg in self._mcp_servers.items()
@@ -146,31 +153,24 @@ class AgentLoop:
         self._register_default_tools()
 
     def _tool_enabled(self, name: str) -> bool:
-        """Return True if tool is enabled by config (empty list means allow all)."""
-        return not self.enabled_tools or name.lower() in self.enabled_tools
+        return is_tool_enabled(self.enabled_tools, name)
 
     def _mcp_server_enabled(self, name: str) -> bool:
-        lname = str(name).lower()
-        if self._mcp_enabled_servers and lname not in self._mcp_enabled_servers:
-            return False
-        if lname in self._mcp_disabled_servers:
-            return False
-        return True
+        return is_mcp_server_enabled(
+            name,
+            enabled_servers=self._mcp_enabled_servers,
+            disabled_servers=self._mcp_disabled_servers,
+        )
 
     @staticmethod
     def _normalize_web_search_provider(value: str | None) -> str:
-        mode = (value or "auto").strip().lower()
-        return mode if mode in {"auto", "brave", "exa_mcp", "disabled"} else "auto"
+        return normalize_web_search_provider(value)
 
     def _should_try_exa_mcp_search(self) -> bool:
-        if self.web_search_provider == "disabled":
-            return False
-        if self.web_search_provider == "brave":
-            return False
-        return self._exa_mcp_configured
+        return should_try_exa_mcp_search(self.web_search_provider, self._exa_mcp_configured)
 
     def _should_allow_brave_web_search(self) -> bool:
-        return self.web_search_provider in {"auto", "brave"}
+        return should_allow_brave_web_search(self.web_search_provider)
 
     def _register_default_tools(self) -> None:
         """Register the default set of tools."""
@@ -340,18 +340,12 @@ class AgentLoop:
         return override or self.model
 
     def _truncate_tool_result(self, result: str, tool_name: str) -> str:
-        """Keep tool outputs bounded to reduce context/token blowup in long runs."""
-        if not isinstance(result, str):
-            return result
-        limit = self._TOOL_RESULT_MAX_CHARS
-        if len(result) <= limit:
-            return result
-        head = result[:limit]
-        tail_note = (
-            f"\n\n[truncated by nanobot: {len(result) - limit} chars omitted from `{tool_name}` output "
-            "to control context size. Ask for a narrower query/file/section if needed.]"
+        return truncate_tool_output(
+            result,
+            tool_name,
+            limit=self._TOOL_RESULT_MAX_CHARS,
+            source_label="nanobot",
         )
-        return head + tail_note
 
     def _format_user_error(self, err: Exception) -> str:
         """Return a user-facing failure message with reason and likely fixes."""
@@ -733,7 +727,7 @@ class AgentLoop:
 
     async def _consolidate_memory(self, session, archive_all: bool = False, model: str | None = None) -> bool:
         """Delegate to MemoryStore.consolidate(). Returns True on success."""
-        return await MemoryStore(self.workspace).consolidate(
+        return await self.memory_store.consolidate(
             session, self.provider, (model or self.model),
             archive_all=archive_all, memory_window=self.memory_window,
         )

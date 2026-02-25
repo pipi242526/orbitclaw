@@ -193,12 +193,8 @@ class ChannelManager:
                     timeout=1.0
                 )
 
-                if msg.metadata.get("_progress"):
-                    if msg.metadata.get("_tool_hint"):
-                        if not self.config.channels.send_tool_hints:
-                            continue
-                    elif not self.config.channels.send_progress:
-                        continue
+                if self._should_skip_outbound_message(msg):
+                    continue
                 
                 channel = self.channels.get(msg.channel)
                 if channel:
@@ -213,6 +209,15 @@ class ChannelManager:
                 continue
             except asyncio.CancelledError:
                 break
+
+    def _should_skip_outbound_message(self, msg: OutboundMessage) -> bool:
+        """Apply channel output policy (progress/tool-hint visibility)."""
+        metadata = msg.metadata or {}
+        if not metadata.get("_progress"):
+            return False
+        if metadata.get("_tool_hint"):
+            return not self.config.channels.send_tool_hints
+        return not self.config.channels.send_progress
     
     def get_channel(self, name: str) -> BaseChannel | None:
         """Get a channel by name."""
