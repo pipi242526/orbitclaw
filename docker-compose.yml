@@ -11,6 +11,11 @@ services:
     <<: *common-config
     command: ["gateway"]
     restart: unless-stopped
+    environment:
+      # Use Debian system CA bundle for Python requests/urllib3 inside the container.
+      SSL_CERT_FILE: /etc/ssl/certs/ca-certificates.crt
+      REQUESTS_CA_BUNDLE: /etc/ssl/certs/ca-certificates.crt
+      CURL_CA_BUNDLE: /etc/ssl/certs/ca-certificates.crt
     ports:
       - 18790:18790
     deploy:
@@ -32,6 +37,10 @@ services:
     environment:
       # Optional: set in shell before `docker compose up` to enable Web UI auth.
       NANOBOT_WEBUI_TOKEN: ${NANOBOT_WEBUI_TOKEN:-}
+      # Use Debian system CA bundle for Python requests/urllib3 inside the container.
+      SSL_CERT_FILE: /etc/ssl/certs/ca-certificates.crt
+      REQUESTS_CA_BUNDLE: /etc/ssl/certs/ca-certificates.crt
+      CURL_CA_BUNDLE: /etc/ssl/certs/ca-certificates.crt
     ports:
       - 18791:18791
     deploy:
@@ -48,5 +57,9 @@ services:
     profiles:
       - cli
     command: ["status"]
+    environment:
+      SSL_CERT_FILE: /etc/ssl/certs/ca-certificates.crt
+      REQUESTS_CA_BUNDLE: /etc/ssl/certs/ca-certificates.crt
+      CURL_CA_BUNDLE: /etc/ssl/certs/ca-certificates.crt
     stdin_open: true
     tty: true
