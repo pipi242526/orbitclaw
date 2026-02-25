@@ -602,8 +602,8 @@ You can keep the framework unchanged and only tune tool/skill availability:
 Notes:
 - `tools.enabled` empty (default) means all built-in tools are enabled.
 - `tools.aliases` lets you expose a tool under another name (`alias -> target`), including MCP tools after they connect.
-- `tools.web.search.provider` supports `exa_mcp` / `disabled` (`auto` / `brave` are compatibility aliases and are treated as `exa_mcp` in this branch).
-- `web_search` is provided by Exa MCP (via compatibility alias to `web_search_exa`).
+- `tools.web.search.provider` supports `exa_mcp` / `disabled`.
+- `web_search` is provided by Exa MCP (via alias to `web_search_exa`).
 - `skills.disabled` hides selected skills from the agent context.
 - Run `nanobot status` to see tool/skill diagnostics (missing API keys, missing local MCP commands, active MCP filters).
 
@@ -929,7 +929,6 @@ Notes:
 
 - `provider: "exa_mcp"`: use Exa MCP for `web_search` (recommended/default in this branch).
 - `provider: "disabled"`: disable web search entirely.
-- `provider: "auto"` / `provider: "brave"`: accepted for compatibility, but treated as `exa_mcp` in this branch.
 
 
 

@@ -1,6 +1,6 @@
 import json
 
-from nanobot.config.loader import save_config
+from nanobot.config.loader import _migrate_config, save_config
 from nanobot.config.schema import Config
 
 
@@ -15,8 +15,7 @@ def test_save_config_slims_duplicates_and_legacy_web_search_fields(tmp_path):
         "web_search": "mcp_exa_web_search_exa",
         " doc_read ": "mcp_docloader_read_document",
     }
-    cfg.tools.web.search.provider = "auto"
-    cfg.tools.web.search.api_key = ""
+    cfg.tools.web.search.provider = "brave"
     cfg.skills.disabled = ["tmux", "tmux", "clawhub"]
 
     out = tmp_path / "config.json"
@@ -33,3 +32,19 @@ def test_save_config_slims_duplicates_and_legacy_web_search_fields(tmp_path):
     assert data["tools"]["web"]["search"]["provider"] == "exa_mcp"
     assert "apiKey" not in data["tools"]["web"]["search"]
     assert data["skills"]["disabled"] == ["tmux", "clawhub"]
+
+
+def test_migrate_config_normalizes_legacy_search_provider_and_drops_api_key():
+    data = {
+        "tools": {
+            "web": {
+                "search": {
+                    "provider": "brave",
+                    "apiKey": "legacy-secret",
+                }
+            }
+        }
+    }
+    out = _migrate_config(data)
+    assert out["tools"]["web"]["search"]["provider"] == "exa_mcp"
+    assert "apiKey" not in out["tools"]["web"]["search"]

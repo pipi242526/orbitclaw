@@ -82,6 +82,14 @@ def _migrate_config(data: dict) -> dict:
     exec_cfg = tools.get("exec", {})
     if "restrictToWorkspace" in exec_cfg and "restrictToWorkspace" not in tools:
         tools["restrictToWorkspace"] = exec_cfg.pop("restrictToWorkspace")
+    # Normalize legacy web search provider modes and remove deprecated Brave API key field.
+    web_cfg = tools.get("web", {})
+    search_cfg = web_cfg.get("search", {}) if isinstance(web_cfg, dict) else {}
+    if isinstance(search_cfg, dict):
+        provider = str(search_cfg.get("provider") or "").strip().lower()
+        if provider in {"auto", "brave"} or provider not in {"", "exa_mcp", "disabled"}:
+            search_cfg["provider"] = "exa_mcp"
+        search_cfg.pop("apiKey", None)
     return data
 
 
@@ -124,13 +132,11 @@ def _slim_config_for_save(data: dict) -> dict:
             search_cfg = web_cfg.get("search")
             if isinstance(search_cfg, dict):
                 provider = str(search_cfg.get("provider") or "exa_mcp").strip().lower()
-                if provider in {"auto", "brave"} or provider not in {"exa_mcp", "disabled"}:
+                if provider not in {"exa_mcp", "disabled"}:
                     search_cfg["provider"] = "exa_mcp"
                 else:
                     search_cfg["provider"] = provider
-                # Brave search is removed in this branch; drop empty legacy field to reduce noise.
-                if not str(search_cfg.get("apiKey") or "").strip():
-                    search_cfg.pop("apiKey", None)
+                search_cfg.pop("apiKey", None)
 
     skills = data.get("skills")
     if isinstance(skills, dict) and isinstance(skills.get("disabled"), list):

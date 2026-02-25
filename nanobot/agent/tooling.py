@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Iterable, Mapping
 from typing import Any
 
-_WEB_SEARCH_PROVIDERS = {"auto", "brave", "exa_mcp", "disabled"}
+_WEB_SEARCH_PROVIDERS = {"exa_mcp", "disabled"}
 
 
 def normalize_name_set(values: Iterable[str] | None) -> set[str]:
@@ -29,13 +29,8 @@ def normalize_tool_aliases(aliases: Mapping[str, str] | None) -> dict[str, str]:
 
 
 def normalize_web_search_provider(value: str | None) -> str:
-    mode = (value or "auto").strip().lower()
-    if mode not in _WEB_SEARCH_PROVIDERS:
-        return "exa_mcp"
-    # Backward compatibility: Brave/auto modes are collapsed into Exa MCP.
-    if mode in {"auto", "brave"}:
-        return "exa_mcp"
-    return mode
+    mode = (value or "exa_mcp").strip().lower()
+    return mode if mode in _WEB_SEARCH_PROVIDERS else "exa_mcp"
 
 
 def is_tool_enabled(enabled_tools: set[str], name: str) -> bool:

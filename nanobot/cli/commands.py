@@ -52,8 +52,8 @@ def _apply_recommended_tool_defaults(config: Config) -> None:
     """Seed lightweight MCP/tool defaults for first-time users without overriding custom settings."""
     tools = config.tools
 
-    # Prefer Exa MCP for search when still on default auto selection.
-    if not tools.web.search.provider or tools.web.search.provider == "auto":
+    # Prefer Exa MCP for search.
+    if not tools.web.search.provider or tools.web.search.provider not in {"exa_mcp", "disabled"}:
         tools.web.search.provider = "exa_mcp"
 
     if "exa" not in tools.mcp_servers:
@@ -1142,10 +1142,9 @@ def status():
                 if len(unavailable_skills) > 5:
                     console.print(f"  [dim]... {len(unavailable_skills) - 5} more unavailable skills[/dim]")
 
-        raw_provider_mode = (config.tools.web.search.provider or "exa_mcp").strip().lower()
-        if raw_provider_mode not in {"auto", "brave", "exa_mcp", "disabled"}:
-            raw_provider_mode = "exa_mcp"
-        provider_mode = "exa_mcp" if raw_provider_mode in {"auto", "brave"} else raw_provider_mode
+        provider_mode = (config.tools.web.search.provider or "exa_mcp").strip().lower()
+        if provider_mode not in {"exa_mcp", "disabled"}:
+            provider_mode = "exa_mcp"
         enabled_servers = {s.lower() for s in config.tools.mcp_enabled_servers}
         disabled_servers = {s.lower() for s in config.tools.mcp_disabled_servers}
         configured_servers = list(config.tools.mcp_servers.keys())
@@ -1193,8 +1192,7 @@ def status():
                 effective_search = "exa_mcp (missing exa mcp server config)"
         else:
             effective_search = "unknown"
-        provider_label = provider_mode if raw_provider_mode == provider_mode else f"{raw_provider_mode} (compat→{provider_mode})"
-        console.print(f"Web search provider: {provider_label}  ->  {effective_search}")
+        console.print(f"Web search provider: {provider_mode}  ->  {effective_search}")
 
         active_servers: list[str] = []
         for name in configured_servers:
@@ -1233,16 +1231,10 @@ def status():
             console.print(f"  - {name}: [red]invalid config[/red] (missing command/url)")
 
         warnings: list[str] = []
-        if raw_provider_mode in {"auto", "brave"}:
-            warnings.append(
-                f"web_search provider={raw_provider_mode} is deprecated in this branch and is treated as exa_mcp"
-            )
         if provider_mode == "exa_mcp" and not exa_configured:
             warnings.append("web_search provider=exa_mcp but Exa MCP server is not configured")
         if provider_mode == "exa_mcp" and exa_configured and not exa_web_search_exposed:
             warnings.append("Exa MCP is active but web_search_exa is filtered by MCP tool filters")
-        if (config.tools.web.search.api_key or "").strip():
-            warnings.append("tools.web.search.apiKey is set but Brave search support has been removed (unused)")
         if config.tools.enabled and "web_search" not in {t.lower() for t in config.tools.enabled}:
             warnings.append("web_search is excluded by tools.enabled")
         for alias_name, target_name in config.tools.aliases.items():
@@ -1289,28 +1281,15 @@ def doctor():
             "Add profiles.items.<name> or clear profiles.active to disable profile overlay.",
         ))
 
-    raw_provider_mode = (config.tools.web.search.provider or "exa_mcp").strip().lower()
-    if raw_provider_mode not in {"auto", "brave", "exa_mcp", "disabled"}:
-        raw_provider_mode = "exa_mcp"
-    provider_mode = "exa_mcp" if raw_provider_mode in {"auto", "brave"} else raw_provider_mode
+    provider_mode = (config.tools.web.search.provider or "exa_mcp").strip().lower()
+    if provider_mode not in {"exa_mcp", "disabled"}:
+        provider_mode = "exa_mcp"
     exa_cfg = config.tools.mcp_servers.get("exa")
-    if raw_provider_mode in {"auto", "brave"}:
-        findings.append((
-            "warn",
-            f"web search provider '{raw_provider_mode}' is deprecated and treated as exa_mcp in this branch",
-            "Set tools.web.search.provider to exa_mcp (or disabled) to avoid confusion.",
-        ))
     if provider_mode == "exa_mcp" and not exa_cfg:
         findings.append((
             "error",
             "web search provider is exa_mcp but MCP server 'exa' is not configured",
             "Add tools.mcpServers.exa.url = https://mcp.exa.ai/mcp?tools=web_search_exa,get_code_context_exa",
-        ))
-    if (config.tools.web.search.api_key or "").strip():
-        findings.append((
-            "warn",
-            "tools.web.search.apiKey is set but Brave search support is removed in this branch",
-            "Delete tools.web.search.apiKey (or keep it in env for other tools) to reduce config noise.",
         ))
 
     doc_cfg = config.tools.mcp_servers.get("docloader")

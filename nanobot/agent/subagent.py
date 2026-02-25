@@ -53,7 +53,7 @@ class SubagentManager:
         exec_config: "ExecToolConfig | None" = None,
         restrict_to_workspace: bool = False,
         mcp_servers: dict | None = None,
-        web_search_provider: str = "auto",
+        web_search_provider: str = "exa_mcp",
         mcp_enabled_servers: list[str] | None = None,
         mcp_disabled_servers: list[str] | None = None,
         mcp_enabled_tools: list[str] | None = None,

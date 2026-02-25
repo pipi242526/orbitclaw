@@ -76,7 +76,7 @@ class AgentLoop:
         restrict_to_workspace: bool = False,
         session_manager: SessionManager | None = None,
         mcp_servers: dict | None = None,
-        web_search_provider: str = "auto",
+        web_search_provider: str = "exa_mcp",
         mcp_enabled_servers: list[str] | None = None,
         mcp_disabled_servers: list[str] | None = None,
         mcp_enabled_tools: list[str] | None = None,
@@ -335,7 +335,7 @@ class AgentLoop:
                 "检查 tools.aliases 是否映射到不存在的目标工具",
                 "检查 MCP server/tool 过滤项（mcpEnabled*/mcpDisabled*）是否把工具过滤掉了",
             ])
-        elif "brave_api_key" in lower or ("brave" in lower and "api" in lower):
+        elif "web_search_exa" in lower or ("exa" in lower and "mcp" in lower and "search" in lower):
             fixes.extend([
                 "使用 Exa MCP：tools.web.search.provider = exa_mcp",
                 "检查 tools.mcpServers.exa 和 mcpEnabledTools 是否已启用 web_search_exa",
