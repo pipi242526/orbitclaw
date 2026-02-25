@@ -26,6 +26,7 @@ from nanobot.agent.tools.alias import install_tool_aliases
 from nanobot.agent.tools.filesystem import ReadFileTool, WriteFileTool, EditFileTool, ListDirTool
 from nanobot.agent.tools.shell import ExecTool
 from nanobot.agent.tools.web import (
+    WeatherTool,
     WebFetchTool,
     has_exa_search_mcp,
     install_exa_web_search_alias,
@@ -177,6 +178,8 @@ class SubagentManager:
                     self._register_subagent_web_search_initial(tools)
                 if self._tool_enabled("web_fetch"):
                     tools.register(WebFetchTool())
+                if self._tool_enabled("weather"):
+                    tools.register(WeatherTool())
                 self._apply_configured_tool_aliases(tools, stage="startup")
 
                 if self._mcp_servers:

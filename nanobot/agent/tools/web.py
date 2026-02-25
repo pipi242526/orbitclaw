@@ -1,11 +1,11 @@
-"""Web tools: web_search and web_fetch."""
+"""Web/network tools: web_search, web_fetch, weather."""
 
 import html
 import json
 import os
 import re
 from typing import Any
-from urllib.parse import urlparse
+from urllib.parse import quote, urlparse
 
 import httpx
 
@@ -339,3 +339,115 @@ class WebFetchTool(Tool):
         text = re.sub(r'</(p|div|section|article)>', '\n\n', text, flags=re.I)
         text = re.sub(r'<(br|hr)\s*/?>', '\n', text, flags=re.I)
         return _normalize(_strip_tags(text))
+
+
+class WeatherTool(Tool):
+    """Get weather and short forecast using wttr.in JSON API (no key required)."""
+
+    name = "weather"
+    description = "Get current weather and short forecast for a city/location (no API key required)."
+    parameters = {
+        "type": "object",
+        "properties": {
+            "location": {"type": "string", "description": "City or location name, e.g. 'New York' or '纽约'."},
+            "days": {"type": "integer", "description": "Forecast days (1-3). Default 1.", "minimum": 1, "maximum": 3},
+        },
+        "required": ["location"],
+    }
+
+    @staticmethod
+    def _dump(payload: dict[str, Any]) -> str:
+        return json.dumps(payload, ensure_ascii=False)
+
+    @staticmethod
+    def _text(node: Any, key: str) -> str:
+        value = node.get(key) if isinstance(node, dict) else None
+        if isinstance(value, list):
+            for item in value:
+                if isinstance(item, dict) and "value" in item:
+                    return str(item.get("value") or "")
+            return ""
+        return str(value or "")
+
+    @classmethod
+    def _area_name(cls, payload: dict[str, Any]) -> str:
+        area = (payload.get("nearest_area") or [{}])[0]
+        parts = [
+            cls._text(area, "areaName"),
+            cls._text(area, "region"),
+            cls._text(area, "country"),
+        ]
+        seen: list[str] = []
+        for part in parts:
+            part = part.strip()
+            if part and part not in seen:
+                seen.append(part)
+        return ", ".join(seen)
+
+    @classmethod
+    def _parse_current(cls, payload: dict[str, Any]) -> dict[str, Any]:
+        current = (payload.get("current_condition") or [{}])[0]
+        return {
+            "observedAt": str(current.get("localObsDateTime") or ""),
+            "temperatureC": str(current.get("temp_C") or ""),
+            "temperatureF": str(current.get("temp_F") or ""),
+            "feelsLikeC": str(current.get("FeelsLikeC") or current.get("feelsLikeC") or ""),
+            "humidity": str(current.get("humidity") or ""),
+            "windKmph": str(current.get("windspeedKmph") or ""),
+            "windDir": str(current.get("winddir16Point") or ""),
+            "visibilityKm": str(current.get("visibility") or ""),
+            "desc": cls._text(current, "weatherDesc"),
+        }
+
+    @classmethod
+    def _parse_forecast(cls, payload: dict[str, Any], days: int) -> list[dict[str, Any]]:
+        result: list[dict[str, Any]] = []
+        for day in (payload.get("weather") or [])[:days]:
+            hourly = day.get("hourly") or []
+            midday = hourly[min(len(hourly) - 1, 4)] if hourly else {}
+            result.append(
+                {
+                    "date": str(day.get("date") or ""),
+                    "minC": str(day.get("mintempC") or ""),
+                    "maxC": str(day.get("maxtempC") or ""),
+                    "avgC": str(day.get("avgtempC") or ""),
+                    "sunrise": str((day.get("astronomy") or [{}])[0].get("sunrise") or ""),
+                    "sunset": str((day.get("astronomy") or [{}])[0].get("sunset") or ""),
+                    "desc": cls._text(midday, "weatherDesc"),
+                    "chanceOfRain": str(midday.get("chanceofrain") or ""),
+                }
+            )
+        return result
+
+    async def execute(self, location: str, days: int = 1, **kwargs: Any) -> str:
+        location = (location or "").strip()
+        if not location:
+            return self._dump({"error": "missing_location"})
+
+        forecast_days = min(max(int(days or 1), 1), 3)
+        url = f"https://wttr.in/{quote(location)}?format=j1"
+
+        try:
+            async with httpx.AsyncClient(timeout=20.0, verify=WebFetchTool._httpx_verify_setting()) as client:
+                r = await client.get(url, headers={"User-Agent": USER_AGENT})
+                r.raise_for_status()
+            payload = r.json()
+        except Exception as e:
+            return self._dump(
+                {
+                    "error": "weather_fetch_failed",
+                    "location": location,
+                    "source": "wttr.in",
+                    "detail": str(e),
+                }
+            )
+
+        return self._dump(
+            {
+                "source": "wttr.in",
+                "query": location,
+                "resolvedLocation": self._area_name(payload),
+                "current": self._parse_current(payload),
+                "forecast": self._parse_forecast(payload, forecast_days),
+            }
+        )

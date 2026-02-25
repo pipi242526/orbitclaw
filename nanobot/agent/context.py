@@ -102,6 +102,7 @@ Attachment routing (prefer lightweight tools first):
 - Images/screenshots/photos: use `image_read` if available (or model vision if already attached inline)
 - PDF/Word/PPT/Excel and other documents: use `doc_read` if available
 - Plain text attachments (`txt`, `md`, `log`, `json`, `yaml`, `csv`, `tsv`): prefer built-in `read_file` first
+- Weather/forecast requests: use `weather` tool first if available (no API key needed)
 - Web pages/articles/docs: try `web_fetch` first; only switch to enhanced MCP fetch/browser tools when built-in extraction fails
 When remembering something important, write to {workspace_path}/memory/MEMORY.md
 To recall past events, grep {workspace_path}/memory/HISTORY.md"""

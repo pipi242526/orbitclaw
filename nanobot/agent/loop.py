@@ -33,6 +33,7 @@ from nanobot.agent.tools.registry import ToolRegistry
 from nanobot.agent.tools.shell import ExecTool
 from nanobot.agent.tools.spawn import SpawnTool
 from nanobot.agent.tools.web import (
+    WeatherTool,
     WebFetchTool,
     has_exa_search_mcp,
     install_exa_web_search_alias,
@@ -192,6 +193,8 @@ class AgentLoop:
 
         if self._tool_enabled("web_fetch"):
             self.tools.register(WebFetchTool())
+        if self._tool_enabled("weather"):
+            self.tools.register(WeatherTool())
         if self._tool_enabled("claude_code") and self.claude_code_config and self.claude_code_config.enabled:
             self.tools.register(
                 ClaudeCodeTool(
