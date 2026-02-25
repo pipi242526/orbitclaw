@@ -272,6 +272,7 @@ class ClaudeCodeToolConfig(Base):
     tmux_command: str = "tmux"
     session_prefix: str = "cc_"
     default_working_dir: str = ""  # Empty -> workspace
+    auto_install_tmux: bool = True  # Best-effort install tmux at startup when tool is enabled
     timeout: int = 15  # Seconds for tmux subprocess calls
     startup_wait_ms: int = 800  # Wait before optional initial prompt / first tail
     capture_lines: int = 120  # Default lines for tail/status preview
