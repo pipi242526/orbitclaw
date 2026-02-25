@@ -2,6 +2,7 @@
 
 import html
 import json
+import os
 import re
 from typing import Any
 from urllib.parse import urlparse
@@ -23,6 +24,10 @@ _BINARY_DOC_CTYPES = (
     "image/",
     "audio/",
     "video/",
+)
+_SYSTEM_CA_CANDIDATES = (
+    "/etc/ssl/certs/ca-certificates.crt",  # Debian/Ubuntu/Alpine (common)
+    "/etc/ssl/cert.pem",  # macOS/Homebrew/OpenSSL layouts
 )
 
 
@@ -204,6 +209,18 @@ class WebFetchTool(Tool):
             }
 
         return None
+
+    @staticmethod
+    def _httpx_verify_setting() -> str | bool:
+        """Prefer an explicit CA bundle path when available (Docker/server friendly)."""
+        for env_key in ("SSL_CERT_FILE", "REQUESTS_CA_BUNDLE", "CURL_CA_BUNDLE"):
+            value = (os.getenv(env_key) or "").strip()
+            if value and os.path.exists(value):
+                return value
+        for path in _SYSTEM_CA_CANDIDATES:
+            if os.path.exists(path):
+                return path
+        return True
     
     async def execute(self, url: str, extractMode: str = "markdown", maxChars: int | None = None, **kwargs: Any) -> str:
         from readability import Document
@@ -219,7 +236,8 @@ class WebFetchTool(Tool):
             async with httpx.AsyncClient(
                 follow_redirects=True,
                 max_redirects=MAX_REDIRECTS,
-                timeout=30.0
+                timeout=30.0,
+                verify=self._httpx_verify_setting(),
             ) as client:
                 r = await client.get(url, headers={"User-Agent": USER_AGENT})
                 r.raise_for_status()

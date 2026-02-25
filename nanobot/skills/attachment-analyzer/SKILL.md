@@ -1,6 +1,6 @@
 ---
 name: attachment-analyzer
-description: Analyze chat attachments (images, PDF, Word, PowerPoint, Excel/CSV) using MCP document/image tools and return concise findings plus recommended next steps.
+description: Analyze chat attachments (images, PDF, Word, PowerPoint, Excel/CSV/TXT) using MCP document/image tools and built-in file reading, then return concise findings plus recommended next steps.
 category: analysis
 lang: zh,en
 requires_cli: uvx
@@ -30,8 +30,9 @@ Produce a useful result quickly with a stable structure:
 
 Prefer MCP document/image tools when available (for example):
 
-- `read_document` (PDF/DOCX/PPT/XLS/XLSX/TXT)
+- `read_document` (PDF/DOC/DOCX/PPT/PPTX/XLS/XLSX)
 - `read_image` (image analysis / OCR-friendly image loading)
+- `read_file` (TXT/MD/LOG/JSON/YAML/CSV/TSV and other plain text files)
 
 If aliases exist, use the alias names configured by the project (for example `doc_read`, `image_read`).
 
@@ -40,10 +41,12 @@ If aliases exist, use the alias names configured by the project (for example `do
 1. Identify attachment paths from the user message/context.
 2. Group by file type:
    - image (`png/jpg/jpeg/webp/gif`)
-   - document (`pdf/doc/docx/ppt/pptx/xls/xlsx/csv/txt`)
+   - binary document (`pdf/doc/docx/ppt/pptx/xls/xlsx`)
+   - plain text (`txt/md/log/json/yaml/yml/csv/tsv`)
 3. For each file:
    - images: use image tool first
-   - documents: use document tool first
+   - binary documents: use document tool first
+   - plain text files: use `read_file` first (do not force `doc_read`)
    - if tool unavailable, fall back to built-in capabilities (e.g. image vision) or explain limitation clearly
 4. Summarize in Chinese by default unless the user asks another language.
 5. End with a practical next-step suggestion.

@@ -101,6 +101,7 @@ If you need to use tools, call them directly — never send a preliminary messag
 Attachment routing (prefer lightweight tools first):
 - Images/screenshots/photos: use `image_read` if available (or model vision if already attached inline)
 - PDF/Word/PPT/Excel and other documents: use `doc_read` if available
+- Plain text attachments (`txt`, `md`, `log`, `json`, `yaml`, `csv`, `tsv`): prefer built-in `read_file` first
 - Web pages/articles/docs: try `web_fetch` first; only switch to enhanced MCP fetch/browser tools when built-in extraction fails
 When remembering something important, write to {workspace_path}/memory/MEMORY.md
 To recall past events, grep {workspace_path}/memory/HISTORY.md"""
@@ -206,11 +207,21 @@ To recall past events, grep {workspace_path}/memory/HISTORY.md"""
 
         attachment_hint = ""
         if non_image_attachments:
+            plain_text_exts = {".txt", ".md", ".log", ".json", ".yaml", ".yml", ".csv", ".tsv"}
+            plain_text_files = [p for p in non_image_attachments if Path(p).suffix.lower() in plain_text_exts]
+            binary_doc_files = [p for p in non_image_attachments if p not in plain_text_files]
             lines = "\n".join(f"- {p}" for p in non_image_attachments)
+            hint_lines = []
+            if plain_text_files:
+                txt_lines = "\n".join(f"  - {p}" for p in plain_text_files)
+                hint_lines.append(f"Plain-text files (prefer `read_file`):\n{txt_lines}")
+            if binary_doc_files:
+                doc_lines = "\n".join(f"  - {p}" for p in binary_doc_files)
+                hint_lines.append(f"Document files (prefer `doc_read`):\n{doc_lines}")
             attachment_hint = (
                 "\n\nAttached local files (non-image):\n"
                 f"{lines}\n"
-                "Use `doc_read` when available to parse these files."
+                + ("\n" + "\n".join(hint_lines) if hint_lines else "")
             )
 
         if not images:
