@@ -164,7 +164,7 @@ def run_webui(
             except Exception:
                 auth_token = ""
             if auth_token:
-                print(f"🔐 Web UI auth token loaded from {token_path}")
+                print(f"🔐 Web UI auth token loaded from {token_path}", flush=True)
                 return auth_token
         auth_token = secrets.token_urlsafe(18)
         token_path.parent.mkdir(parents=True, exist_ok=True)
@@ -173,8 +173,8 @@ def run_webui(
             os.chmod(token_path, 0o600)
         except Exception:
             pass
-        print(f"🔐 Web UI auth token generated (first start): {auth_token}")
-        print(f"🔐 Saved token to: {token_path}")
+        print(f"🔐 Web UI auth token generated (first start): {auth_token}", flush=True)
+        print(f"🔐 Saved token to: {token_path}", flush=True)
         return auth_token
 
     _resolve_auth_token()
