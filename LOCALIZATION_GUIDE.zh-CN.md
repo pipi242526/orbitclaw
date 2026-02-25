@@ -21,6 +21,8 @@
 - `web_search` 已支持 Exa MCP 兼容别名（主代理 + 子代理）
 - `nanobot status` 已增强工具/技能诊断（缺 API key、MCP 命令缺失、过滤状态等）
 - `nanobot doctor` 已支持修复导向诊断（问题原因 + 修复建议）
+- 聊天内命令 `/model`：按会话切换模型（不改全局默认）
+- 配置支持 `${ENV_VAR}` 占位符，且会自动读取 `~/.nanobot/.env` / `~/.nanobot/env/*.env`
 
 ## 2. 当前内置工具盘点（Built-in Tools）
 
@@ -63,6 +65,27 @@
 - 场景型：`weather`、`skill-creator`
 
 ## 4. 推荐配置模板（以你当前方向为主）
+
+### 4.0.1 推荐的密钥维护方式（统一 env 文件）
+
+适合你这种第三方 API 平台、多模型切换场景：
+
+- 把 API Base / Key 放到 `~/.nanobot/.env` 或 `~/.nanobot/env/*.env`
+- `config.json` 中用 `${ENV_VAR}` 占位符引用
+- 这样切换平台和轮换 key 不需要改主配置文件
+
+示例：
+
+```json
+{
+  "providers": {
+    "custom": {
+      "apiBase": "${MY_API_BASE}",
+      "apiKey": "${MY_API_KEY}"
+    }
+  }
+}
+```
 
 ### 4.0 当前推荐栈（轻量优先，适合你的项目）
 
@@ -282,6 +305,16 @@ nanobot doctor
 - 技能依赖是否缺失（例如 `gh`、`tmux`、`summarize`）
 
 适合你这种“工具和技能经常替换”的二开场景。
+
+## 6.4 聊天内切换模型（已支持）
+
+在对话中直接发送：
+
+- `/model`：查看当前会话生效模型
+- `/model custom/xxx`：切换当前会话模型（不影响全局）
+- `/model reset`：恢复默认模型
+
+这对你使用第三方 API 平台特别实用：同一个机器人会话里可以快速测试不同模型，而不用改配置重启。
 
 ## 7. 从外部项目借鉴的设计点（适合 nanobot）
 

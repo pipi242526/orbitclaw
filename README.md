@@ -855,6 +855,24 @@ You can also alias MCP tools to stable names used by your prompts:
 }
 ```
 
+You can also keep secrets outside `config.json`:
+
+- helper env files are auto-loaded from `~/.nanobot/.env` and `~/.nanobot/env/*.env`
+- JSON string values support `${ENV_VAR}` and `${ENV_VAR:-default}` placeholders
+
+Example:
+
+```json
+{
+  "providers": {
+    "custom": {
+      "apiBase": "${MY_API_BASE}",
+      "apiKey": "${MY_API_KEY}"
+    }
+  }
+}
+```
+
 Profiles can provide reusable tool/skill baselines (e.g. `cn_dev`, `research`, `offline`) while keeping top-level `tools` / `skills` as explicit overrides:
 
 ```json
@@ -945,6 +963,12 @@ Notes:
 | `nanobot channels status` | Show channel status |
 
 Interactive mode exits: `exit`, `quit`, `/exit`, `/quit`, `:q`, or `Ctrl+D`.
+
+Chat slash commands (CLI and chat channels):
+- `/new` — archive+clear current conversation session
+- `/model` — show current model (default or session override)
+- `/model provider/model-name` — switch model for the current session only
+- `/model reset` — restore default model
 
 <details>
 <summary><b>Scheduled Tasks (Cron)</b></summary>

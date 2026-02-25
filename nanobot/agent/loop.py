@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import gc
 import json
 import re
 from contextlib import AsyncExitStack
@@ -48,6 +49,9 @@ class AgentLoop:
     4. Executes tool calls
     5. Sends responses back
     """
+    _CHANNEL_PROCESSING_NOTICE_DELAY_S = 8.0
+    _TOOL_RESULT_MAX_CHARS = 20000
+    _GC_EVERY_TURNS = 12
 
     def __init__(
         self,
@@ -138,6 +142,7 @@ class AgentLoop:
         self._consolidating: set[str] = set()  # Session keys with consolidation in progress
         self._consolidation_tasks: set[asyncio.Task] = set()  # Strong refs to in-flight tasks
         self._consolidation_locks: dict[str, asyncio.Lock] = {}
+        self._processed_turns = 0
         self._register_default_tools()
 
     def _tool_enabled(self, name: str) -> bool:
@@ -314,16 +319,101 @@ class AgentLoop:
             return f'{tc.name}("{val[:40]}…")' if len(val) > 40 else f'{tc.name}("{val}")'
         return ", ".join(_fmt(tc) for tc in tool_calls)
 
+    @staticmethod
+    def _processing_notice_text() -> str:
+        return "处理中，请稍候…"
+
+    def _effective_model_for_session(self, session: Session | None) -> str:
+        if not session:
+            return self.model
+        override = str(session.metadata.get("model_override", "")).strip()
+        return override or self.model
+
+    def _truncate_tool_result(self, result: str, tool_name: str) -> str:
+        """Keep tool outputs bounded to reduce context/token blowup in long runs."""
+        if not isinstance(result, str):
+            return result
+        limit = self._TOOL_RESULT_MAX_CHARS
+        if len(result) <= limit:
+            return result
+        head = result[:limit]
+        tail_note = (
+            f"\n\n[truncated by nanobot: {len(result) - limit} chars omitted from `{tool_name}` output "
+            "to control context size. Ask for a narrower query/file/section if needed.]"
+        )
+        return head + tail_note
+
+    def _format_user_error(self, err: Exception) -> str:
+        """Return a user-facing failure message with reason and likely fixes."""
+        raw = str(err).strip() or err.__class__.__name__
+        reason = raw
+        fixes: list[str] = []
+        lower = raw.lower()
+
+        if "tool '" in lower and "not found" in lower:
+            fixes.extend([
+                "检查 tools.enabled 是否把该工具禁用了",
+                "检查 tools.aliases 是否映射到不存在的目标工具",
+                "检查 MCP server/tool 过滤项（mcpEnabled*/mcpDisabled*）是否把工具过滤掉了",
+            ])
+        elif "brave_api_key" in lower or "brave" in lower and "api" in lower:
+            fixes.extend([
+                "改用 Exa MCP：tools.web.search.provider = exa_mcp（推荐）",
+                "或在 tools.web.search.apiKey 配置 Brave Search API key",
+            ])
+        elif "mcp" in lower and "timed out" in lower:
+            fixes.extend([
+                "检查对应 MCP 服务是否可用（命令/网络）",
+                "适当增大 tools.mcpServers.<name>.toolTimeout",
+                "先缩小请求范围（更短网页/更小文件/更精确查询）",
+            ])
+        elif "no module named" in lower:
+            fixes.extend([
+                "安装缺失的 Python 依赖后重试",
+                "如果是可选功能依赖，先禁用对应工具/技能",
+            ])
+        elif "timeout" in lower:
+            fixes.extend([
+                "缩小任务范围后重试",
+                "检查网络和目标服务状态",
+            ])
+        else:
+            fixes.extend([
+                "运行 `nanobot doctor` 查看工具/技能依赖和配置问题",
+                "检查 MCP 配置、API Key、模型名是否正确",
+            ])
+
+        lines = [
+            "处理失败。",
+            f"原因: {reason}",
+            "建议:",
+        ]
+        lines.extend(f"{i}. {fix}" for i, fix in enumerate(fixes, 1))
+        return "\n".join(lines)
+
+    def _maybe_release_memory(self, active_session_key: str | None = None) -> None:
+        """Periodic lightweight cleanup for long-running gateway processes."""
+        self._processed_turns += 1
+        keep = {active_session_key} if active_session_key else None
+        try:
+            self.sessions.prune_cache(keep_keys=keep)
+        except Exception:
+            logger.debug("Session cache prune skipped")
+        if self._processed_turns % self._GC_EVERY_TURNS == 0:
+            gc.collect()
+
     async def _run_agent_loop(
         self,
         initial_messages: list[dict],
         on_progress: Callable[[str], Awaitable[None]] | None = None,
+        model: str | None = None,
     ) -> tuple[str | None, list[str]]:
         """Run the agent iteration loop. Returns (final_content, tools_used)."""
         messages = initial_messages
         iteration = 0
         final_content = None
         tools_used: list[str] = []
+        active_model = model or self.model
 
         while iteration < self.max_iterations:
             iteration += 1
@@ -331,7 +421,7 @@ class AgentLoop:
             response = await self.provider.chat(
                 messages=messages,
                 tools=self.tools.get_definitions(),
-                model=self.model,
+                model=active_model,
                 temperature=self.temperature,
                 max_tokens=self.max_tokens,
             )
@@ -365,6 +455,7 @@ class AgentLoop:
                     args_str = json.dumps(tool_call.arguments, ensure_ascii=False)
                     logger.info("Tool call: {}({})", tool_call.name, args_str[:200])
                     result = await self.tools.execute(tool_call.name, tool_call.arguments)
+                    result = self._truncate_tool_result(result, tool_call.name)
                     messages = self.context.add_tool_result(
                         messages, tool_call.id, tool_call.name, result
                     )
@@ -399,8 +490,10 @@ class AgentLoop:
                     await self.bus.publish_outbound(OutboundMessage(
                         channel=msg.channel,
                         chat_id=msg.chat_id,
-                        content=f"Sorry, I encountered an error: {str(e)}"
+                        content=self._format_user_error(e)
                     ))
+                finally:
+                    self._maybe_release_memory(active_session_key=msg.session_key)
             except asyncio.TimeoutError:
                 continue
 
@@ -463,7 +556,8 @@ class AgentLoop:
         session = self.sessions.get_or_create(key)
 
         # Slash commands
-        cmd = msg.content.strip().lower()
+        cmd_text = msg.content.strip()
+        cmd = cmd_text.lower()
         if cmd == "/new":
             lock = self._get_consolidation_lock(session.key)
             self._consolidating.add(session.key)
@@ -473,7 +567,11 @@ class AgentLoop:
                     if snapshot:
                         temp = Session(key=session.key)
                         temp.messages = list(snapshot)
-                        if not await self._consolidate_memory(temp, archive_all=True):
+                        if not await self._consolidate_memory(
+                            temp,
+                            archive_all=True,
+                            model=self._effective_model_for_session(session),
+                        ):
                             return OutboundMessage(
                                 channel=msg.channel, chat_id=msg.chat_id,
                                 content="Memory archival failed, session not cleared. Please try again.",
@@ -495,7 +593,38 @@ class AgentLoop:
                                   content="New session started.")
         if cmd == "/help":
             return OutboundMessage(channel=msg.channel, chat_id=msg.chat_id,
-                                  content="🐈 nanobot commands:\n/new — Start a new conversation\n/help — Show available commands")
+                                  content="🐈 nanobot commands:\n/new — Start a new conversation\n/model — Show or switch model for this session\n/help — Show available commands")
+
+        if cmd == "/model" or cmd.startswith("/model "):
+            current_model = self._effective_model_for_session(session)
+            arg = cmd_text[6:].strip() if len(cmd_text) >= 6 else ""
+            if not arg:
+                source = "session override" if session.metadata.get("model_override") else "default"
+                return OutboundMessage(
+                    channel=msg.channel,
+                    chat_id=msg.chat_id,
+                    content=(
+                        "当前模型设置\n"
+                        f"- 生效模型: `{current_model}` ({source})\n"
+                        f"- 默认模型: `{self.model}`\n\n"
+                        "用法:\n"
+                        "- `/model provider/model-name` 切换当前会话模型\n"
+                        "- `/model reset` 恢复默认模型"
+                    ),
+                )
+            if arg.lower() in {"reset", "default"}:
+                session.metadata.pop("model_override", None)
+                self.sessions.save(session)
+                return OutboundMessage(
+                    channel=msg.channel, chat_id=msg.chat_id,
+                    content=f"已恢复默认模型: `{self.model}`",
+                )
+            session.metadata["model_override"] = arg
+            self.sessions.save(session)
+            return OutboundMessage(
+                channel=msg.channel, chat_id=msg.chat_id,
+                content=f"当前会话模型已切换为: `{arg}`\n提示: 仅影响当前会话（{session.key}）。",
+            )
 
         if len(session.messages) > self.memory_window and session.key not in self._consolidating:
             self._consolidating.add(session.key)
@@ -504,7 +633,10 @@ class AgentLoop:
             async def _consolidate_and_unlock():
                 try:
                     async with lock:
-                        await self._consolidate_memory(session)
+                        await self._consolidate_memory(
+                            session,
+                            model=self._effective_model_for_session(session),
+                        )
                 finally:
                     self._consolidating.discard(session.key)
                     self._prune_consolidation_lock(session.key, lock)
@@ -526,17 +658,47 @@ class AgentLoop:
             media=msg.media if msg.media else None,
             channel=msg.channel, chat_id=msg.chat_id,
         )
+        effective_model = self._effective_model_for_session(session)
+        self.subagents.model = effective_model
 
         async def _bus_progress(content: str) -> None:
+            if msg.channel != "cli":
+                return
             meta = dict(msg.metadata or {})
             meta["_progress"] = True
             await self.bus.publish_outbound(OutboundMessage(
                 channel=msg.channel, chat_id=msg.chat_id, content=content, metadata=meta,
             ))
 
-        final_content, tools_used = await self._run_agent_loop(
-            initial_messages, on_progress=on_progress or _bus_progress,
-        )
+        processing_notice_task: asyncio.Task | None = None
+        if on_progress is None and msg.channel != "cli":
+            async def _delayed_notice() -> None:
+                try:
+                    await asyncio.sleep(self._CHANNEL_PROCESSING_NOTICE_DELAY_S)
+                    meta = dict(msg.metadata or {})
+                    meta["_progress"] = True
+                    meta["_progress_kind"] = "processing"
+                    await self.bus.publish_outbound(OutboundMessage(
+                        channel=msg.channel,
+                        chat_id=msg.chat_id,
+                        content=self._processing_notice_text(),
+                        metadata=meta,
+                    ))
+                except asyncio.CancelledError:
+                    return
+            processing_notice_task = asyncio.create_task(_delayed_notice())
+
+        try:
+            final_content, tools_used = await self._run_agent_loop(
+                initial_messages, on_progress=on_progress or _bus_progress, model=effective_model,
+            )
+        finally:
+            if processing_notice_task and not processing_notice_task.done():
+                processing_notice_task.cancel()
+                try:
+                    await processing_notice_task
+                except asyncio.CancelledError:
+                    pass
 
         if final_content is None:
             final_content = "I've completed processing but have no response to give."
@@ -558,10 +720,10 @@ class AgentLoop:
             metadata=msg.metadata or {},
         )
 
-    async def _consolidate_memory(self, session, archive_all: bool = False) -> bool:
+    async def _consolidate_memory(self, session, archive_all: bool = False, model: str | None = None) -> bool:
         """Delegate to MemoryStore.consolidate(). Returns True on success."""
         return await MemoryStore(self.workspace).consolidate(
-            session, self.provider, self.model,
+            session, self.provider, (model or self.model),
             archive_all=archive_all, memory_window=self.memory_window,
         )
 
@@ -576,5 +738,8 @@ class AgentLoop:
         """Process a message directly (for CLI or cron usage)."""
         await self._connect_mcp()
         msg = InboundMessage(channel=channel, sender_id="user", chat_id=chat_id, content=content)
-        response = await self._process_message(msg, session_key=session_key, on_progress=on_progress)
-        return response.content if response else ""
+        try:
+            response = await self._process_message(msg, session_key=session_key, on_progress=on_progress)
+            return response.content if response else ""
+        finally:
+            self._maybe_release_memory(active_session_key=session_key)

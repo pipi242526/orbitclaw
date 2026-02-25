@@ -234,7 +234,7 @@ def onboard():
             save_config(config)
             console.print(f"[green]✓[/green] Config reset to defaults at {config_path}")
         else:
-            config = load_config(apply_profiles=False)
+            config = load_config(apply_profiles=False, resolve_env=False)
             _apply_recommended_tool_defaults(config)
             save_config(config)
             console.print(f"[green]✓[/green] Config refreshed at {config_path} (existing values preserved)")
@@ -1129,7 +1129,7 @@ def cron_run(
 @app.command()
 def status():
     """Show nanobot status."""
-    from nanobot.config.loader import load_config, get_config_path
+    from nanobot.config.loader import load_config, get_config_path, _discover_env_files
     from nanobot.agent.skills import SkillsLoader
     from nanobot.agent.tools.web import has_exa_search_mcp
 
@@ -1141,6 +1141,9 @@ def status():
 
     console.print(f"Config: {config_path} {'[green]✓[/green]' if config_path.exists() else '[red]✗[/red]'}")
     console.print(f"Workspace: {workspace} {'[green]✓[/green]' if workspace.exists() else '[red]✗[/red]'}")
+    env_files = _discover_env_files()
+    if env_files:
+        console.print(f"Env files: {len(env_files)} loaded helper file(s)")
 
     if config_path.exists():
         from nanobot.providers.registry import PROVIDERS
@@ -1333,7 +1336,7 @@ def status():
 @app.command()
 def doctor():
     """Diagnose configuration/tooling issues and suggest fixes."""
-    from nanobot.config.loader import load_config, get_config_path
+    from nanobot.config.loader import load_config, get_config_path, _discover_env_files
     from nanobot.agent.skills import SkillsLoader
 
     config_path = get_config_path()
@@ -1345,6 +1348,8 @@ def doctor():
     console.print(f"- Config path: {config_path} ({'exists' if config_path.exists() else 'missing'})")
     console.print(f"- Workspace: {workspace} ({'exists' if workspace.exists() else 'missing'})")
     console.print(f"- Active profile: {config.profiles.active or 'none'}")
+    env_files = _discover_env_files()
+    console.print(f"- Env helper files: {len(env_files)}")
 
     findings: list[tuple[str, str, str]] = []  # severity, problem, fix
 
@@ -1401,6 +1406,33 @@ def doctor():
                 findings.append(("warn", f"invalid tool alias entry: {alias_name!r} -> {target_name!r}", "Remove empty alias keys/values."))
             elif a == t:
                 findings.append(("warn", f"noop tool alias: {a} -> {t}", "Delete the alias or point it to a different target tool."))
+
+    active_model = str(config.agents.defaults.model or "")
+    if active_model.startswith("custom/"):
+        if not config.providers.custom.api_base:
+            findings.append((
+                "warn",
+                "default model uses custom/* but providers.custom.apiBase is empty",
+                "Set providers.custom.apiBase to your OpenAI-compatible endpoint.",
+            ))
+        if not config.providers.custom.api_key:
+            findings.append((
+                "warn",
+                "default model uses custom/* but providers.custom.apiKey is empty (or env placeholder not resolved)",
+                "Set providers.custom.apiKey or use ${ENV_VAR} with a helper env file under ~/.nanobot/.env or ~/.nanobot/env/*.env.",
+            ))
+        elif "${" in str(config.providers.custom.api_key):
+            findings.append((
+                "warn",
+                "providers.custom.apiKey still contains an unresolved ${ENV_VAR} placeholder",
+                "Check ~/.nanobot/.env or ~/.nanobot/env/*.env and ensure the referenced variable name exists.",
+            ))
+        if config.providers.custom.api_base and "${" in str(config.providers.custom.api_base):
+            findings.append((
+                "warn",
+                "providers.custom.apiBase still contains an unresolved ${ENV_VAR} placeholder",
+                "Check your helper env files and variable names for MY_API_BASE-like values.",
+            ))
 
     # Skills availability diagnosis (respects explicit disabled list).
     disabled_skills = set(config.skills.disabled or [])

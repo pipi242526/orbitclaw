@@ -72,6 +72,7 @@ class SessionManager:
         self.sessions_dir = ensure_dir(self.workspace / "sessions")
         self.legacy_sessions_dir = Path.home() / ".nanobot" / "sessions"
         self._cache: dict[str, Session] = {}
+        self._max_cache_entries = 16
     
     def _get_session_path(self, key: str) -> Path:
         """Get the file path for a session."""
@@ -101,6 +102,7 @@ class SessionManager:
             session = Session(key=key)
         
         self._cache[key] = session
+        self.prune_cache(keep_keys={key})
         return session
     
     def _load(self, key: str) -> Session | None:
@@ -168,10 +170,31 @@ class SessionManager:
                 f.write(json.dumps(msg, ensure_ascii=False) + "\n")
 
         self._cache[session.key] = session
+        self.prune_cache(keep_keys={session.key})
     
     def invalidate(self, key: str) -> None:
         """Remove a session from the in-memory cache."""
         self._cache.pop(key, None)
+
+    def prune_cache(self, keep_keys: set[str] | None = None, max_entries: int | None = None) -> int:
+        """Trim in-memory session cache to limit long-running process memory usage."""
+        limit = max_entries or self._max_cache_entries
+        if limit <= 0 or len(self._cache) <= limit:
+            return 0
+        protected = keep_keys or set()
+        victims = [
+            (k, s.updated_at)
+            for k, s in self._cache.items()
+            if k not in protected
+        ]
+        victims.sort(key=lambda x: x[1])  # oldest first
+        removed = 0
+        for key, _ in victims:
+            if len(self._cache) <= limit:
+                break
+            self._cache.pop(key, None)
+            removed += 1
+        return removed
     
     def list_sessions(self) -> list[dict[str, Any]]:
         """

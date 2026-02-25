@@ -32,6 +32,7 @@ class SubagentManager:
     to handle specific tasks. They share the same LLM provider but have
     isolated context and a focused system prompt.
     """
+    _TOOL_RESULT_MAX_CHARS = 12000
     
     def __init__(
         self,
@@ -159,6 +160,7 @@ class SubagentManager:
     ) -> None:
         """Execute the subagent task and announce the result."""
         logger.info("Subagent [{}] starting task: {}", task_id, label)
+        active_model = self.model
 
         try:
             async with AsyncExitStack() as mcp_stack:
@@ -224,7 +226,7 @@ class SubagentManager:
                     response = await self.provider.chat(
                         messages=messages,
                         tools=tools.get_definitions(),
-                        model=self.model,
+                        model=active_model,
                         temperature=self.temperature,
                         max_tokens=self.max_tokens,
                     )
@@ -253,6 +255,12 @@ class SubagentManager:
                             args_str = json.dumps(tool_call.arguments, ensure_ascii=False)
                             logger.debug("Subagent [{}] executing: {} with arguments: {}", task_id, tool_call.name, args_str)
                             result = await tools.execute(tool_call.name, tool_call.arguments)
+                            if isinstance(result, str) and len(result) > self._TOOL_RESULT_MAX_CHARS:
+                                omitted = len(result) - self._TOOL_RESULT_MAX_CHARS
+                                result = (
+                                    result[:self._TOOL_RESULT_MAX_CHARS]
+                                    + f"\n\n[truncated by nanobot subagent: {omitted} chars omitted to control context size]"
+                                )
                             messages.append({
                                 "role": "tool",
                                 "tool_call_id": tool_call.id,
