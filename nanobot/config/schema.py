@@ -168,6 +168,8 @@ class QQConfig(Base):
 class ChannelsConfig(Base):
     """Configuration for chat channels."""
 
+    send_progress: bool = True  # Allow generic progress placeholders (e.g. "处理中…")
+    send_tool_hints: bool = False  # Never expose tool/MCP invocation hints by default
     whatsapp: WhatsAppConfig = Field(default_factory=WhatsAppConfig)
     telegram: TelegramConfig = Field(default_factory=TelegramConfig)
     discord: DiscordConfig = Field(default_factory=DiscordConfig)
@@ -185,7 +187,7 @@ class AgentDefaults(Base):
     workspace: str = "~/.nanobot/workspace"
     model: str = "anthropic/claude-opus-4-5"
     max_tokens: int = 8192
-    temperature: float = 0.7
+    temperature: float = 0.1
     max_tool_iterations: int = 20
     memory_window: int = 50
 

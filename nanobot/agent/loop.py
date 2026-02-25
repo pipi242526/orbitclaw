@@ -636,7 +636,8 @@ class AgentLoop:
                 content=f"当前会话模型已切换为: `{arg}`\n提示: 仅影响当前会话（{session.key}）。",
             )
 
-        if len(session.messages) > self.memory_window and session.key not in self._consolidating:
+        unconsolidated = len(session.messages) - session.last_consolidated
+        if (unconsolidated >= self.memory_window and session.key not in self._consolidating):
             self._consolidating.add(session.key)
             lock = self._get_consolidation_lock(session.key)
 

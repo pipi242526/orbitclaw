@@ -281,111 +281,25 @@ def onboard():
 
 
 def _create_workspace_templates(workspace: Path):
-    """Create default workspace template files."""
-    templates = {
-        "AGENTS.md": """# Agent Instructions
+    """Create default workspace template files from bundled templates."""
+    from importlib.resources import files as pkg_files
 
-Follow a lightweight, tool-governed workflow.
+    templates_dir = pkg_files("nanobot") / "templates"
+    for item in templates_dir.iterdir():
+        if item.name == "memory" or not item.name.endswith(".md"):
+            continue
+        dest = workspace / item.name
+        if not dest.exists():
+            dest.write_text(item.read_text(encoding="utf-8"), encoding="utf-8")
+            console.print(f"  [dim]Created {item.name}[/dim]")
 
-## Working Style
-
-- Reply directly first, then use tools when they materially improve accuracy
-- Before using tools, say one short sentence about what you are going to do
-- Prefer the simplest tool that solves the task (avoid heavy tools by default)
-- When a dependency is missing, explain the blocker and propose the smallest fix
-
-## Tool Routing (Default)
-
-- Search: use `web_search` (configured backend may be Exa MCP or Brave)
-- Web pages/docs: try `web_fetch` first; only escalate to enhanced MCP/browser tools if needed
-- Images/screenshots: use `image_read` when available
-- PDF/Word/PPT/Excel/CSV: use `doc_read` when available
-
-## Memory
-
-- Persistent facts: `memory/MEMORY.md`
-- Event history: `memory/HISTORY.md` (append-only, grep-searchable)
-""",
-        "SOUL.md": """# Soul
-
-I am nanobot: practical, transparent, and efficient.
-
-## Personality
-
-- Calm and direct
-- Accuracy-first
-- Tool-aware (prefer lightweight paths before complex ones)
-
-## Operating Principles
-
-- Keep the project maintainable
-- Prefer configuration over hardcoded behavior
-- Fail clearly (say what is missing and how to fix it)
-- Make upgrades reversible (profiles, aliases, filters)
-""",
-        "USER.md": """# User
-
-Record stable preferences and collaboration habits here.
-
-## Suggested Fields
-
-- Preferred language: Chinese / English / mixed
-- Timezone: (e.g. Asia/Shanghai)
-- Coding style preferences
-- Risk tolerance (fast iteration vs safer changes)
-- Common workflows (research / coding / ops / review)
-""",
-        "TOOLS.md": """# Tools & Skills Policy
-
-This workspace uses a lightweight default setup.
-
-## Core Built-in Tools (usually keep enabled)
-
-- `read_file`, `write_file`, `edit_file`, `list_dir`, `exec`
-- `web_search`, `web_fetch`
-- `message`, `spawn`
-
-## Optional MCP Enhancements
-
-- Exa MCP: web search and code/document search context
-- Document loader MCP: `doc_read` / `image_read` for attachments
-- Optional web fetch enhancement MCP (enable only when built-in `web_fetch` fails)
-
-## Skills Strategy
-
-- Keep always-useful skills enabled (e.g. memory, cron, github if `gh` exists)
-- Hide skills that lack local dependencies
-- Prefer profiles to switch bundles instead of editing many fields manually
-""",
-    }
-    
-    for filename, content in templates.items():
-        file_path = workspace / filename
-        if not file_path.exists():
-            file_path.write_text(content, encoding="utf-8")
-            console.print(f"  [dim]Created {filename}[/dim]")
-    
     # Create memory directory and MEMORY.md
     memory_dir = workspace / "memory"
     memory_dir.mkdir(exist_ok=True)
+    memory_template = templates_dir / "memory" / "MEMORY.md"
     memory_file = memory_dir / "MEMORY.md"
     if not memory_file.exists():
-        memory_file.write_text("""# Long-term Memory
-
-This file stores important information that should persist across sessions.
-
-## User Information
-
-(Important facts about the user)
-
-## Preferences
-
-(User preferences learned over time)
-
-## Important Notes
-
-(Things to remember)
-""", encoding="utf-8")
+        memory_file.write_text(memory_template.read_text(encoding="utf-8"), encoding="utf-8")
         console.print("  [dim]Created memory/MEMORY.md[/dim]")
     
     history_file = memory_dir / "HISTORY.md"
