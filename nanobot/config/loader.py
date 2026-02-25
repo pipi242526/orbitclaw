@@ -69,6 +69,7 @@ def save_config(config: Config, config_path: Path | None = None) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
 
     data = config.model_dump(by_alias=True)
+    data = _slim_config_for_save(data)
 
     with open(path, "w", encoding="utf-8") as f:
         json.dump(data, f, indent=2, ensure_ascii=False)
@@ -81,6 +82,60 @@ def _migrate_config(data: dict) -> dict:
     exec_cfg = tools.get("exec", {})
     if "restrictToWorkspace" in exec_cfg and "restrictToWorkspace" not in tools:
         tools["restrictToWorkspace"] = exec_cfg.pop("restrictToWorkspace")
+    return data
+
+
+def _dedupe_strings(items: list) -> list:
+    seen: set[str] = set()
+    out: list = []
+    for item in items or []:
+        key = str(item)
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append(item)
+    return out
+
+
+def _slim_config_for_save(data: dict) -> dict:
+    """Prune duplicate/invalid config entries without changing intended behavior."""
+    if not isinstance(data, dict):
+        return data
+
+    tools = data.get("tools")
+    if isinstance(tools, dict):
+        for key in ("enabled", "mcpEnabledServers", "mcpDisabledServers", "mcpEnabledTools", "mcpDisabledTools"):
+            if isinstance(tools.get(key), list):
+                tools[key] = _dedupe_strings(tools[key])
+
+        aliases = tools.get("aliases")
+        if isinstance(aliases, dict):
+            cleaned_aliases: dict[str, str] = {}
+            for raw_key, raw_value in aliases.items():
+                key = str(raw_key).strip()
+                value = str(raw_value).strip()
+                if not key or not value or key == value:
+                    continue
+                cleaned_aliases[key] = value
+            tools["aliases"] = cleaned_aliases
+
+        web_cfg = tools.get("web")
+        if isinstance(web_cfg, dict):
+            search_cfg = web_cfg.get("search")
+            if isinstance(search_cfg, dict):
+                provider = str(search_cfg.get("provider") or "exa_mcp").strip().lower()
+                if provider in {"auto", "brave"} or provider not in {"exa_mcp", "disabled"}:
+                    search_cfg["provider"] = "exa_mcp"
+                else:
+                    search_cfg["provider"] = provider
+                # Brave search is removed in this branch; drop empty legacy field to reduce noise.
+                if not str(search_cfg.get("apiKey") or "").strip():
+                    search_cfg.pop("apiKey", None)
+
+    skills = data.get("skills")
+    if isinstance(skills, dict) and isinstance(skills.get("disabled"), list):
+        skills["disabled"] = _dedupe_strings(skills["disabled"])
+
     return data
 
 

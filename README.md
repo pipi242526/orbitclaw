@@ -589,7 +589,7 @@ You can keep the framework unchanged and only tune tool/skill availability:
     },
     "web": {
       "search": {
-        "provider": "auto"
+        "provider": "exa_mcp"
       }
     }
   },
