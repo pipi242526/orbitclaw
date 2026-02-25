@@ -403,6 +403,47 @@ def _create_workspace_templates(workspace: Path):
     skills_dir.mkdir(exist_ok=True)
 
 
+def _bootstrap_runtime_for_webui(config_path: Path | None = None) -> None:
+    """Ensure config/workspace/runtime folders exist before starting the Web UI."""
+    from nanobot.config.loader import get_config_path, load_config, save_config
+    from nanobot.config.schema import Config
+    from nanobot.utils.helpers import (
+        get_env_dir,
+        get_env_file,
+        get_global_skills_path,
+        get_mcp_home,
+        get_workspace_path,
+    )
+
+    cfg_path = (config_path or get_config_path()).expanduser()
+
+    if cfg_path.exists():
+        config = load_config(cfg_path, apply_profiles=False, resolve_env=False)
+        changed = False
+        before = config.model_dump(by_alias=True)
+        _apply_recommended_tool_defaults(config)
+        after = config.model_dump(by_alias=True)
+        changed = before != after
+        if changed:
+            save_config(config, cfg_path)
+    else:
+        config = Config()
+        _apply_recommended_tool_defaults(config)
+        save_config(config, cfg_path)
+        console.print(f"[green]✓[/green] WebUI bootstrap created config at {cfg_path}")
+
+    # Ensure runtime folders exist even if Web UI is used before onboard.
+    get_env_dir()
+    get_env_file().touch(exist_ok=True)
+    get_mcp_home()
+    get_global_skills_path()
+
+    # Ensure workspace + templates exist for the main bot experience.
+    workspace = config.workspace_path if getattr(config, "workspace_path", None) else get_workspace_path()
+    workspace.mkdir(parents=True, exist_ok=True)
+    _create_workspace_templates(workspace)
+
+
 def _make_single_provider(config: Config, model: str):
     """Create a provider for a concrete model (non-endpoint-routed path)."""
     from nanobot.providers.litellm_provider import LiteLLMProvider
@@ -1589,6 +1630,7 @@ def webui(
     """Run a lightweight local web UI for config / MCP / skills / channels management."""
     from nanobot.webui.server import run_webui
 
+    _bootstrap_runtime_for_webui(config_path)
     run_webui(host=host, port=port, config_path=config_path, open_browser=open_browser, auth_token=token)
 
 

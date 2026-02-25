@@ -5,6 +5,8 @@ from __future__ import annotations
 import base64
 import hmac
 import json
+import os
+import secrets
 import threading
 import webbrowser
 from html import escape
@@ -150,6 +152,32 @@ def run_webui(
     """Start the local nanobot web UI."""
     cfg_path = (config_path or get_config_path()).expanduser()
     auth_token = (auth_token or "").strip()
+    token_path = cfg_path.parent / "webui.token"
+
+    def _resolve_auth_token() -> str:
+        nonlocal auth_token
+        if auth_token:
+            return auth_token
+        if token_path.exists():
+            try:
+                auth_token = token_path.read_text(encoding="utf-8").strip()
+            except Exception:
+                auth_token = ""
+            if auth_token:
+                print(f"🔐 Web UI auth token loaded from {token_path}")
+                return auth_token
+        auth_token = secrets.token_urlsafe(18)
+        token_path.parent.mkdir(parents=True, exist_ok=True)
+        token_path.write_text(auth_token + "\n", encoding="utf-8")
+        try:
+            os.chmod(token_path, 0o600)
+        except Exception:
+            pass
+        print(f"🔐 Web UI auth token generated (first start): {auth_token}")
+        print(f"🔐 Saved token to: {token_path}")
+        return auth_token
+
+    _resolve_auth_token()
 
     class Handler(BaseHTTPRequestHandler):
         server_version = "nanobot-webui/0.1"
@@ -157,15 +185,32 @@ def run_webui(
         def log_message(self, format: str, *args: Any) -> None:  # noqa: A003
             return  # keep CLI clean
 
+        def do_HEAD(self) -> None:  # noqa: N802
+            parsed = urlparse(self.path)
+            path = parsed.path or "/"
+            if path == "/healthz":
+                self._send_text(200, "ok", head_only=True)
+                return
+            if not self._auth_ok():
+                self._require_auth(head_only=True)
+                return
+            if path in {"/", "/endpoints", "/channels", "/extensions"}:
+                self._send_text(200, "", head_only=True)
+                return
+            self._send_text(404, "Not Found", head_only=True)
+
         def do_GET(self) -> None:  # noqa: N802
+            parsed = urlparse(self.path)
+            path = parsed.path or "/"
+            if path == "/healthz":
+                self._send_text(200, "ok")
+                return
             if not self._auth_ok():
                 self._require_auth()
                 return
-            parsed = urlparse(self.path)
             params = parse_qs(parsed.query)
             msg = (params.get("msg") or [""])[0]
             err = (params.get("err") or [""])[0]
-            path = parsed.path or "/"
             try:
                 if path == "/":
                     self._render_dashboard(msg=msg, err=err)
@@ -226,6 +271,22 @@ def run_webui(
             self.end_headers()
             self.wfile.write(data)
 
+        def _send_text(
+            self,
+            status: int,
+            text: str,
+            *,
+            head_only: bool = False,
+            content_type: str = "text/plain; charset=utf-8",
+        ) -> None:
+            data = text.encode("utf-8")
+            self.send_response(status)
+            self.send_header("Content-Type", content_type)
+            self.send_header("Content-Length", str(len(data)))
+            self.end_headers()
+            if not head_only:
+                self.wfile.write(data)
+
         def _auth_ok(self) -> bool:
             if not auth_token:
                 return True
@@ -240,14 +301,15 @@ def run_webui(
             _, _, password = decoded.partition(":")
             return hmac.compare_digest(password, auth_token)
 
-        def _require_auth(self) -> None:
+        def _require_auth(self, *, head_only: bool = False) -> None:
             body = b"Authentication required"
             self.send_response(401)
             self.send_header("WWW-Authenticate", 'Basic realm="nanobot Web UI"')
             self.send_header("Content-Type", "text/plain; charset=utf-8")
             self.send_header("Content-Length", str(len(body)))
             self.end_headers()
-            self.wfile.write(body)
+            if not head_only:
+                self.wfile.write(body)
 
         def _redirect(self, path: str, *, msg: str = "", err: str = "") -> None:
             params: dict[str, str] = {}
