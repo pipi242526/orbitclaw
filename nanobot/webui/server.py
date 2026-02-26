@@ -23,7 +23,7 @@ from nanobot.config.schema import (
     SkillsConfig,
     ToolsConfig,
 )
-from nanobot.utils.helpers import get_env_dir, get_env_file, get_global_skills_path
+from nanobot.utils.helpers import get_env_dir, get_env_file, get_global_skills_path, get_media_dir
 
 
 _ENDPOINT_TYPES = [
@@ -140,6 +140,35 @@ def _collect_skill_rows(config: Config) -> list[dict[str, Any]]:
     return rows
 
 
+def _media_display_name(name: str) -> str:
+    if "_" in name:
+        prefix, rest = name.split("_", 1)
+        if prefix and len(prefix) >= 8 and rest:
+            return rest
+    return name
+
+
+def _list_media_rows() -> list[dict[str, Any]]:
+    media_dir = get_media_dir()
+    rows: list[dict[str, Any]] = []
+    if not media_dir.exists():
+        return rows
+    for p in sorted(media_dir.iterdir(), key=lambda x: x.stat().st_mtime, reverse=True):
+        if not p.is_file():
+            continue
+        st = p.stat()
+        rows.append(
+            {
+                "name": p.name,
+                "display_name": _media_display_name(p.name),
+                "size": st.st_size,
+                "mtime": st.st_mtime,
+                "path": str(p),
+            }
+        )
+    return rows
+
+
 def run_webui(
     host: str = "127.0.0.1",
     port: int = 18791,
@@ -202,7 +231,7 @@ def run_webui(
             if route_path is None:
                 self._send_text(404, "Not Found", head_only=True)
                 return
-            if route_path in {"/", "/endpoints", "/channels", "/extensions"}:
+            if route_path in {"/", "/endpoints", "/channels", "/extensions", "/media"}:
                 self._send_text(200, "", head_only=True)
                 return
             self._send_text(404, "Not Found", head_only=True)
@@ -229,6 +258,8 @@ def run_webui(
                     self._render_channels(msg=msg, err=err)
                 elif route_path == "/extensions":
                     self._render_extensions(msg=msg, err=err)
+                elif route_path == "/media":
+                    self._render_media(msg=msg, err=err)
                 else:
                     self._send_html(404, self._page("Not Found", "<p>Not Found</p>", tab=""))
             except Exception as e:  # keep UI resilient
@@ -251,9 +282,12 @@ def run_webui(
                 if route_path == "/extensions":
                     self._handle_post_extensions(form)
                     return
+                if route_path == "/media":
+                    self._handle_post_media(form)
+                    return
                 self._redirect("/", err="Unsupported action")
             except Exception as e:
-                target = route_path if route_path in {"/endpoints", "/channels", "/extensions"} else "/"
+                target = route_path if route_path in {"/endpoints", "/channels", "/extensions", "/media"} else "/"
                 self._redirect(target, err=str(e))
 
         def _load_config(self) -> Config:
@@ -336,6 +370,7 @@ def run_webui(
                 ("/endpoints", "Models & APIs"),
                 ("/channels", "Channels"),
                 ("/extensions", "MCP & Skills"),
+                ("/media", "Media"),
             ]
             links = []
             for href, label in items:
@@ -774,6 +809,61 @@ def run_webui(
 """
             self._send_html(200, self._page("MCP & Skills", body, tab="/extensions", msg=msg, err=err))
 
+        def _render_media(self, *, msg: str = "", err: str = "") -> None:
+            rows = _list_media_rows()
+            media_dir = get_media_dir()
+            table_rows = []
+            for r in rows[:300]:
+                size_kb = f"{r['size']/1024:.1f} KB"
+                from datetime import datetime
+                mtime = datetime.fromtimestamp(r["mtime"]).strftime("%Y-%m-%d %H:%M:%S")
+                table_rows.append(
+                    f"""
+<tr>
+  <td><input type="checkbox" name="selected_name" value="{escape(r['name'])}"></td>
+  <td><code>{escape(r['display_name'])}</code><div class="muted mono">{escape(r['name'])}</div></td>
+  <td>{escape(size_kb)}</td>
+  <td class="small">{escape(mtime)}</td>
+  <td class="mono small">{escape(r['path'])}</td>
+  <td>
+    <button class="btn" type="submit" name="action" value="delete_one:{escape(r['name'])}" onclick="return confirm('删除该文件?');">删除</button>
+  </td>
+</tr>
+"""
+                )
+            body = f"""
+<div class="grid cols-2">
+  <section class="card">
+    <h2>媒体目录</h2>
+    <table>
+      <tr><th>目录</th><td><code>{escape(str(media_dir))}</code></td></tr>
+      <tr><th>文件数</th><td>{len(rows)}</td></tr>
+    </table>
+    <div class="muted" style="margin-top:8px">这里是聊天渠道（TG/Discord/Feishu 等）下载的附件目录。建议先查看再删除。</div>
+  </section>
+  <section class="card">
+    <h2>聊天内清理命令（推荐）</h2>
+    <ul class="list small">
+      <li>先列出：<code>media_files(action=&quot;list&quot;)</code></li>
+      <li>再删除：<code>media_files(action=&quot;delete&quot;, names=[...])</code></li>
+      <li>如果 TG 文件名看起来像随机串，请查看 <code>displayName</code>（已尽量保留原文件名）</li>
+    </ul>
+  </section>
+</div>
+<form method="post" class="card" style="margin-top:14px">
+  <h2>媒体文件列表 / 删除</h2>
+  <div class="row" style="margin-bottom:10px">
+    <button class="btn warn" type="submit" name="action" value="delete_selected" onclick="return confirm('删除选中的文件?');">删除选中项</button>
+    <button class="btn subtle" type="submit" name="action" value="refresh">刷新</button>
+  </div>
+  <table>
+    <tr><th></th><th>显示名 / 文件名</th><th>大小</th><th>修改时间</th><th>路径</th><th></th></tr>
+    {''.join(table_rows) or '<tr><td colspan="6" class="muted">媒体目录为空</td></tr>'}
+  </table>
+</form>
+"""
+            self._send_html(200, self._page("Media", body, tab="/media", msg=msg, err=err))
+
         def _handle_post_endpoints(self, form: dict[str, list[str]]) -> None:
             cfg = self._load_config()
             action = self._form_str(form, "action")
@@ -871,6 +961,43 @@ def run_webui(
                 return
 
             raise ValueError("Unsupported extensions action")
+
+        def _handle_post_media(self, form: dict[str, list[str]]) -> None:
+            action = self._form_str(form, "action")
+            media_dir = get_media_dir().resolve()
+            if action == "refresh":
+                self._redirect("/media", msg="已刷新媒体列表")
+                return
+
+            names: list[str] = []
+            if action == "delete_selected":
+                names = [n.strip() for n in form.get("selected_name", []) if n.strip()]
+            elif action.startswith("delete_one:"):
+                names = [action.split(":", 1)[1].strip()]
+            else:
+                raise ValueError("Unsupported media action")
+
+            if not names:
+                raise ValueError("请选择要删除的文件")
+
+            deleted = 0
+            missing = 0
+            for name in names:
+                if "/" in name or "\\" in name or name in {".", ".."}:
+                    continue
+                p = (media_dir / name).resolve()
+                try:
+                    p.relative_to(media_dir)
+                except ValueError:
+                    continue
+                if not p.exists():
+                    missing += 1
+                    continue
+                if not p.is_file():
+                    continue
+                p.unlink(missing_ok=True)
+                deleted += 1
+            self._redirect("/media", msg=f"已删除 {deleted} 个文件" + (f"，缺失 {missing} 个" if missing else ""))
 
     httpd = ThreadingHTTPServer((host, port), Handler)
     public_host = "127.0.0.1" if host == "0.0.0.0" else host

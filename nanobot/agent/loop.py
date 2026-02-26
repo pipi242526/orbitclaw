@@ -28,6 +28,7 @@ from nanobot.agent.tools.cron import CronTool
 from nanobot.agent.tools.claude_code import ClaudeCodeTool
 from nanobot.agent.tools.alias import install_tool_aliases
 from nanobot.agent.tools.filesystem import EditFileTool, ListDirTool, ReadFileTool, WriteFileTool
+from nanobot.agent.tools.media import MediaFilesTool
 from nanobot.agent.tools.message import MessageTool
 from nanobot.agent.tools.registry import ToolRegistry
 from nanobot.agent.tools.shell import ExecTool
@@ -42,6 +43,7 @@ from nanobot.bus.events import InboundMessage, OutboundMessage
 from nanobot.bus.queue import MessageBus
 from nanobot.providers.base import LLMProvider
 from nanobot.session.manager import Session, SessionManager
+from nanobot.utils.helpers import get_media_dir
 
 if TYPE_CHECKING:
     from nanobot.config.schema import ClaudeCodeToolConfig, ExecToolConfig
@@ -171,6 +173,7 @@ class AgentLoop:
     def _register_default_tools(self) -> None:
         """Register the default set of tools."""
         allowed_dir = self.workspace if self.restrict_to_workspace else None
+        media_read_dirs = [get_media_dir()] if self.restrict_to_workspace else None
         file_tools = (
             ("read_file", ReadFileTool),
             ("write_file", WriteFileTool),
@@ -179,7 +182,16 @@ class AgentLoop:
         )
         for name, cls in file_tools:
             if self._tool_enabled(name):
-                self.tools.register(cls(workspace=self.workspace, allowed_dir=allowed_dir))
+                if name in {"read_file", "list_dir"}:
+                    self.tools.register(
+                        cls(
+                            workspace=self.workspace,
+                            allowed_dir=allowed_dir,
+                            extra_allowed_dirs=media_read_dirs,
+                        )
+                    )
+                else:
+                    self.tools.register(cls(workspace=self.workspace, allowed_dir=allowed_dir))
 
         if self._tool_enabled("exec"):
             self.tools.register(ExecTool(
@@ -193,6 +205,8 @@ class AgentLoop:
 
         if self._tool_enabled("web_fetch"):
             self.tools.register(WebFetchTool())
+        if self._tool_enabled("media_files"):
+            self.tools.register(MediaFilesTool())
         if self._tool_enabled("weather"):
             self.tools.register(WeatherTool())
         if self._tool_enabled("claude_code") and self.claude_code_config and self.claude_code_config.enabled:

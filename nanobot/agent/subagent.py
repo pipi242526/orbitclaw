@@ -24,6 +24,7 @@ from nanobot.agent.tooling import (
 from nanobot.agent.tools.registry import ToolRegistry
 from nanobot.agent.tools.alias import install_tool_aliases
 from nanobot.agent.tools.filesystem import ReadFileTool, WriteFileTool, EditFileTool, ListDirTool
+from nanobot.agent.tools.media import MediaFilesTool
 from nanobot.agent.tools.shell import ExecTool
 from nanobot.agent.tools.web import (
     WeatherTool,
@@ -31,6 +32,7 @@ from nanobot.agent.tools.web import (
     has_exa_search_mcp,
     install_exa_web_search_alias,
 )
+from nanobot.utils.helpers import get_media_dir
 
 
 class SubagentManager:
@@ -160,14 +162,27 @@ class SubagentManager:
                 # Build subagent tools (no message tool, no spawn tool)
                 tools = ToolRegistry()
                 allowed_dir = self.workspace if self.restrict_to_workspace else None
+                media_read_dirs = [get_media_dir()] if self.restrict_to_workspace else None
                 if self._tool_enabled("read_file"):
-                    tools.register(ReadFileTool(workspace=self.workspace, allowed_dir=allowed_dir))
+                    tools.register(
+                        ReadFileTool(
+                            workspace=self.workspace,
+                            allowed_dir=allowed_dir,
+                            extra_allowed_dirs=media_read_dirs,
+                        )
+                    )
                 if self._tool_enabled("write_file"):
                     tools.register(WriteFileTool(workspace=self.workspace, allowed_dir=allowed_dir))
                 if self._tool_enabled("edit_file"):
                     tools.register(EditFileTool(workspace=self.workspace, allowed_dir=allowed_dir))
                 if self._tool_enabled("list_dir"):
-                    tools.register(ListDirTool(workspace=self.workspace, allowed_dir=allowed_dir))
+                    tools.register(
+                        ListDirTool(
+                            workspace=self.workspace,
+                            allowed_dir=allowed_dir,
+                            extra_allowed_dirs=media_read_dirs,
+                        )
+                    )
                 if self._tool_enabled("exec"):
                     tools.register(ExecTool(
                         working_dir=str(self.workspace),
@@ -178,6 +193,8 @@ class SubagentManager:
                     self._register_subagent_web_search_initial(tools)
                 if self._tool_enabled("web_fetch"):
                     tools.register(WebFetchTool())
+                if self._tool_enabled("media_files"):
+                    tools.register(MediaFilesTool())
                 if self._tool_enabled("weather"):
                     tools.register(WeatherTool())
                 self._apply_configured_tool_aliases(tools, stage="startup")

@@ -13,6 +13,7 @@ from nanobot.bus.events import OutboundMessage
 from nanobot.bus.queue import MessageBus
 from nanobot.channels.base import BaseChannel
 from nanobot.config.schema import TelegramConfig
+from nanobot.utils.helpers import safe_filename
 
 
 def _markdown_to_telegram_html(text: str) -> str:
@@ -362,13 +363,21 @@ class TelegramChannel(BaseChannel):
         if media_file and self._app:
             try:
                 file = await self._app.bot.get_file(media_file.file_id)
-                ext = self._get_extension(media_type, getattr(media_file, 'mime_type', None))
+                mime_type = getattr(media_file, 'mime_type', None)
+                ext = self._get_extension(media_type, mime_type)
+                original_name = getattr(media_file, "file_name", None)
                 
                 # Save to centralized nanobot media directory
                 from nanobot.utils.helpers import get_media_dir
                 media_dir = get_media_dir()
                 
-                file_path = media_dir / f"{media_file.file_id[:16]}{ext}"
+                file_path = self._build_media_path(
+                    media_dir=media_dir,
+                    file_id=media_file.file_id,
+                    media_type=media_type,
+                    mime_type=mime_type,
+                    original_name=original_name,
+                )
                 await file.download_to_drive(str(file_path))
                 
                 media_paths.append(str(file_path))
@@ -382,9 +391,11 @@ class TelegramChannel(BaseChannel):
                         logger.info("Transcribed {}: {}...", media_type, transcription[:50])
                         content_parts.append(f"[transcription: {transcription}]")
                     else:
-                        content_parts.append(f"[{media_type}: {file_path}]")
+                        note = f" (original: {original_name})" if original_name else ""
+                        content_parts.append(f"[{media_type}: {file_path}{note}]")
                 else:
-                    content_parts.append(f"[{media_type}: {file_path}]")
+                    note = f" (original: {original_name})" if original_name else ""
+                    content_parts.append(f"[{media_type}: {file_path}{note}]")
                     
                 logger.debug("Downloaded {} to {}", media_type, file_path)
             except Exception as e:
@@ -454,3 +465,30 @@ class TelegramChannel(BaseChannel):
         
         type_map = {"image": ".jpg", "voice": ".ogg", "audio": ".mp3", "file": ""}
         return type_map.get(media_type, "")
+
+    def _build_media_path(
+        self,
+        media_dir,
+        file_id: str,
+        media_type: str,
+        mime_type: str | None,
+        original_name: str | None = None,
+    ):
+        """Build saved media path and preserve original filename/extension when available."""
+        ext = self._get_extension(media_type, mime_type)
+        original = (original_name or "").strip()
+        if original:
+            safe = safe_filename(original).replace(" ", "_")
+            candidate = safe if "." in safe else f"{safe}{ext}"
+        else:
+            candidate = f"{media_type}{ext}"
+
+        stem = file_id[:12]
+        path = media_dir / f"{stem}_{candidate}"
+        if not path.exists():
+            return path
+        for i in range(2, 1000):
+            p = media_dir / f"{stem}_{i}_{candidate}"
+            if not p.exists():
+                return p
+        return media_dir / f"{stem}_{candidate}"
