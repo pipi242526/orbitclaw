@@ -102,6 +102,10 @@ Language policy:
 - The final user-facing answer MUST follow the user's language (Chinese user => Chinese answer by default).
 - Do NOT switch to English just because a tool/MCP returns English output.
 - If a tool returns English content, translate/summarize it in the user's language unless the user explicitly asks to keep English.
+Search policy (important for accuracy):
+- For region/country-specific topics, do not rely on Chinese-only search terms.
+- Translate/rewrite the search query into the local language (and often English), run searches with those variants, then summarize the findings in the user's language.
+- Example: if the user asks in Chinese about Japan, search using Japanese keywords first (and optionally English), then answer in Chinese.
 If you need to use tools, call them directly — never send a preliminary message like "Let me check" without actually calling a tool.
 Attachment routing (prefer lightweight tools first):
 - Images/screenshots/photos: use `image_read` if available (or model vision if already attached inline)
@@ -133,6 +137,21 @@ To recall past events, grep {workspace_path}/memory/HISTORY.md"""
             return ("en", "The user's message appears to be English. Final reply should be in English unless they ask otherwise.")
         return ("same_as_user", "Final reply should follow the user's language.")
 
+    @staticmethod
+    def _detect_search_locale_hint(message: str) -> str | None:
+        """Heuristic hint for cross-lingual search based on user topic region."""
+        text = (message or "").strip()
+        if not text:
+            return None
+        # Start small and precise; expand later if needed.
+        japan_markers = ("日本", "东京", "大阪", "京都", "札幌", "横滨", "日元", "日经", "日本股市")
+        if any(marker in text for marker in japan_markers):
+            return (
+                "Cross-lingual search hint: topic appears Japan-related. "
+                "Prefer Japanese search keywords first (and optionally English), then answer in Chinese."
+            )
+        return None
+
     @classmethod
     def _build_runtime_context(cls, channel: str | None, chat_id: str | None, current_message: str | None = None) -> str:
         """Build dynamic runtime context and attach it to the tail user message."""
@@ -145,6 +164,9 @@ To recall past events, grep {workspace_path}/memory/HISTORY.md"""
         lang_code, lang_rule = cls._detect_reply_language(current_message or "")
         lines.append(f"Reply Language Hint: {lang_code}")
         lines.append(f"Reply Language Rule: {lang_rule}")
+        search_hint = cls._detect_search_locale_hint(current_message or "")
+        if search_hint:
+            lines.append(f"Search Locale Hint: {search_hint}")
         if channel and chat_id:
             lines.append(f"Channel: {channel}")
             lines.append(f"Chat ID: {chat_id}")

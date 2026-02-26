@@ -15,3 +15,8 @@ def test_runtime_context_contains_language_hint():
     assert "Channel: telegram" in ctx
     assert "Chat ID: 123" in ctx
 
+
+def test_runtime_context_contains_japan_search_locale_hint():
+    ctx = ContextBuilder._build_runtime_context(None, None, current_message="帮我查一下日本AI政策最新消息")
+    assert "Search Locale Hint:" in ctx
+    assert "Japan-related" in ctx
