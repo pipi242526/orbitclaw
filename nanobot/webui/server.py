@@ -215,7 +215,7 @@ def run_webui(
                 return
             route_path = self._route_path(path)
             if route_path is None:
-                self._send_html(404, self._page("Not Found", "<p>Not Found</p>", tab=""))
+                self._send_text(404, "Not Found")
                 return
             params = parse_qs(parsed.query)
             msg = (params.get("msg") or [""])[0]
@@ -349,9 +349,8 @@ def run_webui(
                 flash += f'<div class="flash ok">{escape(msg)}</div>'
             if err:
                 flash += f'<div class="flash err">{escape(err)}</div>'
-            access_path_display = f"{path_prefix}/"
             external_host = "127.0.0.1" if host == "0.0.0.0" else host
-            full_access_url = f"http://{external_host}:{port}{access_path_display}"
+            full_access_url = f"http://{external_host}:{port}{path_prefix}/"
             return f"""<!doctype html>
 <html lang="zh-CN">
 <head>
@@ -468,9 +467,9 @@ def run_webui(
         <h1>nanobot Web UI</h1>
         <p>轻量配置管理台（Host: {escape(host)}:{port}） · 使用路径密钥访问（无账号密码弹窗）</p>
         <div class="access-chip">
-          <span>入口</span>
-          <code>{escape(access_path_display)}</code>
-          <button type="button" class="btn" data-copy="{escape(full_access_url)}" onclick="nbCopy(this.dataset.copy)">复制完整地址</button>
+          <span>路径密钥已启用（页面不展示密钥）</span>
+          <button type="button" class="btn" data-copy="{escape(full_access_url)}" onclick="nbCopy(this.dataset.copy)">复制入口地址</button>
+          <button type="button" class="btn subtle" onclick="nbCopy(window.location.href)">复制当前页面地址</button>
         </div>
       </div>
       <nav class="nav">{self._nav(tab)}</nav>
