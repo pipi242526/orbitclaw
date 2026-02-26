@@ -10,7 +10,7 @@ from loguru import logger
 
 from nanobot.agent.tools.base import Tool
 from nanobot.agent.tools.registry import ToolRegistry
-from nanobot.utils.helpers import get_mcp_bin_dir, get_mcp_data_dir, get_mcp_home
+from nanobot.utils.helpers import get_data_path, get_mcp_bin_dir, get_mcp_data_dir, get_mcp_home
 
 
 class MCPToolWrapper(Tool):
@@ -70,6 +70,7 @@ async def connect_mcp_servers(
     mcp_home = get_mcp_home()
     mcp_bin = get_mcp_bin_dir()
     mcp_data = get_mcp_data_dir()
+    nanobot_data = get_data_path()
 
     for name, cfg in mcp_servers.items():
         lname = str(name).lower()
@@ -90,6 +91,13 @@ async def connect_mcp_servers(
                 merged_env["PATH"] = (
                     f"{mcp_bin}{os.pathsep + current_path if current_path else ''}"
                 )
+                # AWS document-loader MCP restricts file access to cwd by default.
+                # Expand base directory to ~/.nanobot so it can read downloaded attachments
+                # in ~/.nanobot/media and workspace files in ~/.nanobot/workspace.
+                cmd_l = (cfg.command or "").lower()
+                args_joined = " ".join(str(a).lower() for a in (cfg.args or []))
+                if lname == "docloader" or "document-loader-mcp-server" in args_joined or "document_loader_mcp_server" in args_joined:
+                    merged_env.setdefault("DOCUMENT_BASE_DIR", str(nanobot_data))
                 params = StdioServerParameters(
                     command=cfg.command, args=cfg.args, env=merged_env or None
                 )
