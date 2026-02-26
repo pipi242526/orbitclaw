@@ -3,6 +3,7 @@
 import base64
 import mimetypes
 import platform
+import re
 from pathlib import Path
 from typing import Any
 
@@ -97,6 +98,10 @@ Only use the 'message' tool when you need to send a message to a specific chat c
 For normal conversation, just respond with text - do not call the message tool.
 
 Always be helpful, accurate, and concise. Before calling tools, briefly tell the user what you're about to do (one short sentence in the user's language).
+Language policy:
+- The final user-facing answer MUST follow the user's language (Chinese user => Chinese answer by default).
+- Do NOT switch to English just because a tool/MCP returns English output.
+- If a tool returns English content, translate/summarize it in the user's language unless the user explicitly asks to keep English.
 If you need to use tools, call them directly — never send a preliminary message like "Let me check" without actually calling a tool.
 Attachment routing (prefer lightweight tools first):
 - Images/screenshots/photos: use `image_read` if available (or model vision if already attached inline)
@@ -109,7 +114,27 @@ When remembering something important, write to {workspace_path}/memory/MEMORY.md
 To recall past events, grep {workspace_path}/memory/HISTORY.md"""
 
     @staticmethod
-    def _build_runtime_context(channel: str | None, chat_id: str | None) -> str:
+    @staticmethod
+    def _detect_reply_language(message: str) -> tuple[str, str]:
+        """Heuristic language hint for the current user message."""
+        text = (message or "").strip()
+        if not text:
+            return ("same_as_user", "Reply in the same language as the user.")
+
+        cjk_count = len(re.findall(r"[\u3400-\u4dbf\u4e00-\u9fff]", text))
+        latin_count = len(re.findall(r"[A-Za-z]", text))
+        # Chinese-heavy input: strongly force Simplified Chinese output.
+        if cjk_count >= 2 and cjk_count >= latin_count:
+            return (
+                "zh-CN",
+                "The user's message is in Chinese. Final reply MUST be in Simplified Chinese unless they explicitly request another language.",
+            )
+        if latin_count >= 4 and cjk_count == 0:
+            return ("en", "The user's message appears to be English. Final reply should be in English unless they ask otherwise.")
+        return ("same_as_user", "Final reply should follow the user's language.")
+
+    @classmethod
+    def _build_runtime_context(cls, channel: str | None, chat_id: str | None, current_message: str | None = None) -> str:
         """Build dynamic runtime context and attach it to the tail user message."""
         from datetime import datetime
         import time as _time
@@ -117,6 +142,9 @@ To recall past events, grep {workspace_path}/memory/HISTORY.md"""
         now = datetime.now().strftime("%Y-%m-%d %H:%M (%A)")
         tz = _time.strftime("%Z") or "UTC"
         lines = [f"Current Time: {now} ({tz})"]
+        lang_code, lang_rule = cls._detect_reply_language(current_message or "")
+        lines.append(f"Reply Language Hint: {lang_code}")
+        lines.append(f"Reply Language Rule: {lang_rule}")
         if channel and chat_id:
             lines.append(f"Channel: {channel}")
             lines.append(f"Chat ID: {chat_id}")
@@ -183,7 +211,7 @@ To recall past events, grep {workspace_path}/memory/HISTORY.md"""
         user_content = self._build_user_content(current_message, media)
         user_content = self._append_runtime_context(
             user_content=user_content,
-            runtime_context=self._build_runtime_context(channel, chat_id),
+            runtime_context=self._build_runtime_context(channel, chat_id, current_message=current_message),
         )
         messages.append({"role": "user", "content": user_content})
 
