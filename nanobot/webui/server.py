@@ -44,6 +44,17 @@ _ENDPOINT_TYPES = [
     "volcengine",
 ]
 
+_REPLY_LANGUAGE_OPTIONS = [
+    ("auto", "auto (跟随用户消息)"),
+    ("zh-CN", "zh-CN (简体中文)"),
+    ("en", "en (English)"),
+    ("ja", "ja (日本語)"),
+    ("ko", "ko (한국어)"),
+    ("fr", "fr (Français)"),
+    ("de", "de (Deutsch)"),
+    ("es", "es (Español)"),
+]
+
 
 def _merge_unique(items: list[str], additions: list[str]) -> list[str]:
     out: list[str] = []
@@ -653,6 +664,10 @@ def run_webui(
   </div>
 </form>
 """
+            reply_lang_options_html = "".join(
+                f'<option value="{escape(v)}" {"selected" if cfg.agents.defaults.reply_language == v else ""}>{escape(label)}</option>'
+                for v, label in _REPLY_LANGUAGE_OPTIONS
+            )
             helper = f"""
 <section class="card">
   <h2>默认模型</h2>
@@ -662,6 +677,28 @@ def run_webui(
     <button class="btn primary" type="submit">保存默认模型</button>
   </form>
   <div class="muted">聊天里仍可用 <code>/model endpoint/model</code> 会话级切换。</div>
+</section>
+<section class="card" style="margin-top:14px">
+  <h2>语言与搜索策略</h2>
+  <form method="post">
+    <input type="hidden" name="action" value="set_agent_preferences">
+    <div class="endpoint-fields">
+      <div class="field">
+        <label>默认回复语言（最终回复）</label>
+        <select name="reply_language">
+          {reply_lang_options_html}
+        </select>
+      </div>
+      <div class="field">
+        <label><input type="checkbox" name="cross_lingual_search" {"checked" if cfg.agents.defaults.cross_lingual_search else ""}> 启用跨语言搜索提示（地区话题优先本地语言检索）</label>
+        <div class="muted">例如中文问日本话题时，先用日语检索，再用中文总结。</div>
+      </div>
+    </div>
+    <div class="row">
+      <button class="btn primary" type="submit">保存语言/搜索策略</button>
+    </div>
+  </form>
+  <div class="muted">这些设置会影响新请求的回复语言约束与搜索策略提示，不需要聊天命令。</div>
 </section>
 <section class="card" style="margin-top:14px">
   <h2>聊天内快捷切换命令</h2>
@@ -874,6 +911,14 @@ def run_webui(
                 cfg.agents.defaults.model = model
                 self._save_config(cfg)
                 self._redirect("/endpoints", msg="默认模型已保存")
+                return
+
+            if action == "set_agent_preferences":
+                reply_language = self._form_str(form, "reply_language", "auto").strip() or "auto"
+                cfg.agents.defaults.reply_language = reply_language
+                cfg.agents.defaults.cross_lingual_search = self._form_bool(form, "cross_lingual_search")
+                self._save_config(cfg)
+                self._redirect("/endpoints", msg="语言与搜索策略已保存")
                 return
 
             if action == "delete_endpoint":

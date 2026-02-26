@@ -20,3 +20,13 @@ def test_runtime_context_contains_japan_search_locale_hint():
     ctx = ContextBuilder._build_runtime_context(None, None, current_message="帮我查一下日本AI政策最新消息")
     assert "Search Locale Hint:" in ctx
     assert "Japan-related" in ctx
+
+
+def test_explicit_reply_language_preference_overrides_detection():
+    ctx = ContextBuilder._build_runtime_context(
+        None,
+        None,
+        current_message="请总结这份pdf",
+        reply_language_preference="ja",
+    )
+    assert "Reply Language Hint: ja" in ctx

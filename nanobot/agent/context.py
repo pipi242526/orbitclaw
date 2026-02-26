@@ -21,10 +21,18 @@ class ContextBuilder:
     
     BOOTSTRAP_FILES = ["AGENTS.md", "SOUL.md", "USER.md", "TOOLS.md", "IDENTITY.md"]
     
-    def __init__(self, workspace: Path, disabled_skills: set[str] | None = None):
+    def __init__(
+        self,
+        workspace: Path,
+        disabled_skills: set[str] | None = None,
+        reply_language_preference: str = "auto",
+        cross_lingual_search: bool = True,
+    ):
         self.workspace = workspace
         self.memory = MemoryStore(workspace)
         self.skills = SkillsLoader(workspace, disabled_skills=disabled_skills)
+        self.reply_language_preference = (reply_language_preference or "auto").strip() or "auto"
+        self.cross_lingual_search = bool(cross_lingual_search)
     
     def build_system_prompt(self, skill_names: list[str] | None = None) -> str:
         """
@@ -119,8 +127,40 @@ To recall past events, grep {workspace_path}/memory/HISTORY.md"""
 
     @staticmethod
     @staticmethod
-    def _detect_reply_language(message: str) -> tuple[str, str]:
+    def _normalize_language_code(value: str | None) -> str:
+        raw = (value or "").strip()
+        if not raw:
+            return "auto"
+        lowered = raw.lower()
+        aliases = {
+            "auto": "auto",
+            "zh": "zh-CN",
+            "zh-cn": "zh-CN",
+            "zh-hans": "zh-CN",
+            "cn": "zh-CN",
+            "en": "en",
+            "en-us": "en",
+            "ja": "ja",
+            "ja-jp": "ja",
+            "jp": "ja",
+            "ko": "ko",
+            "ko-kr": "ko",
+        }
+        return aliases.get(lowered, raw)
+
+    @classmethod
+    def _detect_reply_language(
+        cls,
+        message: str,
+        preferred_language: str | None = "auto",
+    ) -> tuple[str, str]:
         """Heuristic language hint for the current user message."""
+        pref = cls._normalize_language_code(preferred_language)
+        if pref != "auto":
+            return (
+                pref,
+                f"Final reply MUST be in {pref} unless the user explicitly requests another language.",
+            )
         text = (message or "").strip()
         if not text:
             return ("same_as_user", "Reply in the same language as the user.")
@@ -153,7 +193,15 @@ To recall past events, grep {workspace_path}/memory/HISTORY.md"""
         return None
 
     @classmethod
-    def _build_runtime_context(cls, channel: str | None, chat_id: str | None, current_message: str | None = None) -> str:
+    def _build_runtime_context(
+        cls,
+        channel: str | None,
+        chat_id: str | None,
+        current_message: str | None = None,
+        *,
+        reply_language_preference: str = "auto",
+        cross_lingual_search: bool = True,
+    ) -> str:
         """Build dynamic runtime context and attach it to the tail user message."""
         from datetime import datetime
         import time as _time
@@ -161,10 +209,10 @@ To recall past events, grep {workspace_path}/memory/HISTORY.md"""
         now = datetime.now().strftime("%Y-%m-%d %H:%M (%A)")
         tz = _time.strftime("%Z") or "UTC"
         lines = [f"Current Time: {now} ({tz})"]
-        lang_code, lang_rule = cls._detect_reply_language(current_message or "")
+        lang_code, lang_rule = cls._detect_reply_language(current_message or "", preferred_language=reply_language_preference)
         lines.append(f"Reply Language Hint: {lang_code}")
         lines.append(f"Reply Language Rule: {lang_rule}")
-        search_hint = cls._detect_search_locale_hint(current_message or "")
+        search_hint = cls._detect_search_locale_hint(current_message or "") if cross_lingual_search else None
         if search_hint:
             lines.append(f"Search Locale Hint: {search_hint}")
         if channel and chat_id:
@@ -233,7 +281,13 @@ To recall past events, grep {workspace_path}/memory/HISTORY.md"""
         user_content = self._build_user_content(current_message, media)
         user_content = self._append_runtime_context(
             user_content=user_content,
-            runtime_context=self._build_runtime_context(channel, chat_id, current_message=current_message),
+            runtime_context=self._build_runtime_context(
+                channel,
+                chat_id,
+                current_message=current_message,
+                reply_language_preference=self.reply_language_preference,
+                cross_lingual_search=self.cross_lingual_search,
+            ),
         )
         messages.append({"role": "user", "content": user_content})
 

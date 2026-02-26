@@ -186,6 +186,8 @@ class AgentDefaults(Base):
 
     workspace: str = "~/.nanobot/workspace"
     model: str = "anthropic/claude-opus-4-5"
+    reply_language: str = "auto"  # auto | zh-CN | en | ja | ...
+    cross_lingual_search: bool = True  # Rewrite/search in local language for region-specific topics
     max_tokens: int = 8192
     temperature: float = 0.1
     max_tool_iterations: int = 20

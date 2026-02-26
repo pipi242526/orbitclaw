@@ -89,6 +89,8 @@ class AgentLoop:
         tool_aliases: dict[str, str] | None = None,
         enabled_tools: list[str] | None = None,
         disabled_skills: list[str] | None = None,
+        reply_language: str = "auto",
+        cross_lingual_search: bool = True,
     ):
         from nanobot.config.schema import ExecToolConfig
         self.bus = bus
@@ -108,7 +110,12 @@ class AgentLoop:
         self.web_search_provider = normalize_web_search_provider(web_search_provider)
         self.tool_aliases = normalize_tool_aliases(tool_aliases)
 
-        self.context = ContextBuilder(workspace, disabled_skills=self.disabled_skills)
+        self.context = ContextBuilder(
+            workspace,
+            disabled_skills=self.disabled_skills,
+            reply_language_preference=reply_language,
+            cross_lingual_search=cross_lingual_search,
+        )
         self.sessions = session_manager or SessionManager(workspace)
         self.memory_store = MemoryStore(workspace)
         self.tools = ToolRegistry()
