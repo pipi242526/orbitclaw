@@ -24,7 +24,9 @@ echo "=== Starting compose services ==="
 docker compose up -d --force-recreate nanobot-gateway nanobot-webui
 
 echo "=== Running onboard and diagnostics inside gateway ==="
-docker compose exec -T nanobot-gateway nanobot onboard >/tmp/nanobot_onboard_smoke.txt 2>&1 || true
+docker compose exec -T nanobot-gateway sh -lc \
+  'if [ -f /root/.nanobot/config.json ]; then printf "n\n" | nanobot onboard; else nanobot onboard; fi' \
+  >/tmp/nanobot_onboard_smoke.txt 2>&1 || true
 STATUS_OUTPUT="$(docker compose exec -T nanobot-gateway nanobot status 2>&1 || true)"
 DOCTOR_OUTPUT="$(docker compose exec -T nanobot-gateway nanobot doctor 2>&1 || true)"
 
@@ -52,7 +54,7 @@ check "$DOCTOR_OUTPUT" "Summary"
 check "$DOCTOR_OUTPUT" "Findings"
 
 echo "=== Validating Web UI path-token + healthz ==="
-TOKEN="$(docker compose exec -T nanobot-webui sh -lc 'cat /root/.nanobot/webui.path_token 2>/dev/null || true' | tr -d '\r\n')"
+TOKEN="$(docker compose exec -T nanobot-webui sh -lc 'cat /root/.nanobot/webui.path-token 2>/dev/null || cat /root/.nanobot/webui.path_token 2>/dev/null || true' | tr -d '\r\n')"
 if [[ -z "${TOKEN}" ]]; then
   echo "  FAIL: webui path token not generated"
   exit 1
