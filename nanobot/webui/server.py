@@ -6,10 +6,12 @@ import json
 import os
 import re
 import secrets
+import socket
 import threading
 import urllib.error
 import urllib.request
 import webbrowser
+from ipaddress import ip_address
 from html import escape
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -80,6 +82,9 @@ _BUILTIN_TOOL_NAMES = [
     "cron",
 ]
 
+_MAX_SKILL_IMPORT_BYTES = 512 * 1024
+_MAX_REMOTE_JSON_BYTES = 1024 * 1024
+
 _MCP_LIBRARY = [
     {
         "id": "exa",
@@ -111,25 +116,58 @@ _MCP_LIBRARY = [
             args=["mcp-server-fetch@latest"],
         ),
     },
+    {
+        "id": "github",
+        "name": "GitHub MCP",
+        "desc": "GitHub API MCP (requires GITHUB_TOKEN).",
+        "server_name": "github_mcp",
+        "config": MCPServerConfig(
+            command="npx",
+            args=["-y", "@modelcontextprotocol/server-github"],
+            env={"GITHUB_PERSONAL_ACCESS_TOKEN": "${GITHUB_TOKEN}"},
+        ),
+    },
+    {
+        "id": "filesystem",
+        "name": "Filesystem MCP",
+        "desc": "Expose local directory as MCP filesystem tools.",
+        "server_name": "filesystem",
+        "config": MCPServerConfig(
+            command="npx",
+            args=["-y", "@modelcontextprotocol/server-filesystem", "."],
+        ),
+    },
+    {
+        "id": "sqlite",
+        "name": "SQLite MCP",
+        "desc": "SQLite query MCP (local DB inspection).",
+        "server_name": "sqlite",
+        "config": MCPServerConfig(
+            command="npx",
+            args=["-y", "@modelcontextprotocol/server-sqlite", "--db-path", "./data.db"],
+        ),
+    },
+    {
+        "id": "memory",
+        "name": "Memory MCP",
+        "desc": "Simple key-value memory MCP server.",
+        "server_name": "memory_mcp",
+        "config": MCPServerConfig(
+            command="npx",
+            args=["-y", "@modelcontextprotocol/server-memory"],
+        ),
+    },
+    {
+        "id": "sequential",
+        "name": "Sequential Thinking MCP",
+        "desc": "Step-by-step reasoning helper MCP.",
+        "server_name": "sequential_thinking",
+        "config": MCPServerConfig(
+            command="npx",
+            args=["-y", "@modelcontextprotocol/server-sequential-thinking"],
+        ),
+    },
 ]
-
-_SKILL_BUNDLES = {
-    "starter": {
-        "name": "Starter",
-        "desc": "Keep memory + github + weather, disable heavier optional skills.",
-        "disable": {"tmux", "summarize", "clawhub"},
-    },
-    "developer": {
-        "name": "Developer",
-        "desc": "Enable all discovered skills (requires local dependencies).",
-        "disable": set(),
-    },
-    "minimal": {
-        "name": "Minimal",
-        "desc": "Only core behavior; disable most optional skills.",
-        "disable": {"github", "tmux", "summarize", "clawhub", "weather", "skill-creator"},
-    },
-}
 
 _SKILL_LIBRARY = [
     {"id": "memory", "name": "memory", "desc": "Persistent memory best-practice."},
@@ -211,57 +249,6 @@ def _safe_int(raw: str, field_name: str, *, minimum: int = 0) -> int:
     return value
 
 
-def _parse_alias_lines(raw: str) -> dict[str, str]:
-    out: dict[str, str] = {}
-    for line in (raw or "").splitlines():
-        s = line.strip()
-        if not s or s.startswith("#"):
-            continue
-        if "=" in s:
-            left, right = s.split("=", 1)
-        elif "->" in s:
-            left, right = s.split("->", 1)
-        else:
-            continue
-        alias = left.strip()
-        target = right.strip()
-        if alias and target and alias != target:
-            out[alias] = target
-    return out
-
-
-def _apply_tool_policy_preset(config: Config, preset: str) -> None:
-    p = (preset or "").strip().lower()
-    if p in {"light", "cn_light"}:
-        config.tools.enabled = [
-            "read_file", "write_file", "edit_file", "list_dir",
-            "exec", "web_search", "web_fetch",
-            "files_hub", "export_file", "weather",
-            "message", "spawn",
-        ]
-        config.tools.web.search.provider = "exa_mcp"
-        _apply_recommended_tool_defaults(config)
-        config.skills.disabled = ["tmux", "summarize", "clawhub"]
-        return
-    if p in {"research", "full"}:
-        config.tools.enabled = []  # all builtins
-        config.tools.web.search.provider = "exa_mcp"
-        _apply_recommended_tool_defaults(config)
-        config.skills.disabled = []
-        return
-    if p in {"offline", "minimal"}:
-        config.tools.enabled = [
-            "read_file", "write_file", "edit_file", "list_dir",
-            "exec", "files_hub", "export_file",
-            "message", "spawn",
-        ]
-        config.tools.web.search.provider = "disabled"
-        config.tools.mcp_enabled_tools = []
-        config.skills.disabled = ["github", "tmux", "summarize", "clawhub", "weather"]
-        return
-    raise ValueError(f"Unknown preset: {preset}")
-
-
 def _collect_tool_policy_diagnostics(cfg: Config) -> list[str]:
     warnings: list[str] = []
     enabled_builtin = {t.strip() for t in (cfg.tools.enabled or []) if t.strip()}
@@ -317,6 +304,104 @@ def _mask_sensitive_url(url: str) -> str:
         lambda m: f"{m.group(1)}={_mask_secret(m.group(2))}",
         raw,
     )
+
+
+def _is_private_or_local_host(hostname: str) -> bool:
+    h = (hostname or "").strip().lower()
+    if not h:
+        return True
+    if h in {"localhost", "127.0.0.1", "::1"} or h.endswith(".local"):
+        return True
+    try:
+        infos = socket.getaddrinfo(h, None)
+    except socket.gaierror:
+        return True
+    for info in infos:
+        ip = info[4][0]
+        try:
+            obj = ip_address(ip)
+        except ValueError:
+            continue
+        if obj.is_private or obj.is_loopback or obj.is_link_local or obj.is_reserved:
+            return True
+    return False
+
+
+def _build_models_url(api_base: str) -> str:
+    base = (api_base or "").strip().rstrip("/")
+    if base.endswith("/models"):
+        return base
+    return f"{base}/models"
+
+
+def _check_default_model_ref(config: Config, model_ref: str, *, probe_remote: bool = False) -> tuple[bool, str]:
+    text = (model_ref or "").strip()
+    if "/" not in text:
+        return False, "default model must be in endpoint/model format"
+    endpoint_name, model_name = text.split("/", 1)
+    endpoint_name = endpoint_name.strip()
+    model_name = model_name.strip()
+    if not endpoint_name or not model_name:
+        return False, "default model must be in endpoint/model format"
+
+    ep = config.providers.endpoints.get(endpoint_name)
+    if ep is None:
+        return False, f"endpoint not found: {endpoint_name}"
+    if not ep.enabled:
+        return False, f"endpoint is disabled: {endpoint_name}"
+    if ep.models and model_name not in ep.models:
+        return False, f"model '{model_name}' is not listed in endpoint '{endpoint_name}'"
+
+    if ep.type not in {"openai", "openai_compatible"}:
+        return True, "ok (structural check)"
+    if not probe_remote:
+        return True, "ok (structural check)"
+    if not ep.api_base:
+        return False, f"endpoint '{endpoint_name}' has empty api_base"
+
+    headers: dict[str, str] = {"Accept": "application/json", "User-Agent": "nanobot-webui/0.1"}
+    if ep.api_key:
+        headers["Authorization"] = f"Bearer {ep.api_key}"
+    if ep.extra_headers:
+        headers.update({str(k): str(v) for k, v in ep.extra_headers.items()})
+
+    url = _build_models_url(ep.api_base)
+    try:
+        req = urllib.request.Request(url, headers=headers)
+        with urllib.request.urlopen(req, timeout=8) as resp:
+            payload = json.loads(resp.read().decode("utf-8", errors="replace"))
+    except Exception as e:
+        return False, f"probe failed for endpoint '{endpoint_name}': {e}"
+
+    data = payload.get("data")
+    if isinstance(data, list):
+        ids = {str(item.get("id", "")).strip() for item in data if isinstance(item, dict)}
+        ids.discard("")
+        if ids and model_name not in ids:
+            return False, f"model '{model_name}' not returned by {endpoint_name}/models"
+    return True, "ok"
+
+
+def _fetch_public_json(url: str, *, max_bytes: int = _MAX_REMOTE_JSON_BYTES) -> Any:
+    parsed = urlparse((url or "").strip())
+    if parsed.scheme != "https":
+        raise ValueError("URL must use https://")
+    if not parsed.hostname:
+        raise ValueError("URL must include host")
+    if _is_private_or_local_host(parsed.hostname):
+        raise ValueError("URL host must be public")
+    req = urllib.request.Request(url, headers={"Accept": "application/json", "User-Agent": "nanobot-webui/0.1"})
+    try:
+        with urllib.request.urlopen(req, timeout=20) as resp:
+            blob = resp.read(max_bytes + 1)
+    except urllib.error.URLError as e:
+        raise ValueError(f"failed to fetch URL: {e}") from e
+    if len(blob) > max_bytes:
+        raise ValueError("remote JSON is too large")
+    try:
+        return json.loads(blob.decode("utf-8", errors="replace"))
+    except json.JSONDecodeError as e:
+        raise ValueError(f"invalid JSON: {e}") from e
 
 
 _UI_TEXTS = {
@@ -835,6 +920,8 @@ def run_webui(
 
         def _render_dashboard(self, *, msg: str = "", err: str = "") -> None:
             cfg = self._load_config()
+            zh = self._ui_lang == "zh-CN"
+            t = (lambda en, zh_cn: zh_cn if zh else en)
             channels_data = cfg.channels.model_dump()
             channel_names = ["telegram", "discord", "feishu", "dingtalk", "qq", "slack", "whatsapp", "email", "mochat"]
             enabled_channels = [name for name in channel_names if bool((channels_data.get(name) or {}).get("enabled"))]
@@ -842,48 +929,57 @@ def run_webui(
             mcp_servers = cfg.tools.mcp_servers or {}
             skills_rows = _collect_skill_rows(cfg)
             unavailable_skills = [s for s in skills_rows if (not s["available"]) and (not s["disabled"])]
+            media_count = len(_list_media_rows())
+            export_count = len(_list_store_rows(get_exports_dir(cfg.tools.files_hub.exports_dir)))
+            default_model_ok, default_model_reason = _check_default_model_ref(
+                load_config(cfg_path, apply_profiles=False, resolve_env=True),
+                cfg.agents.defaults.model,
+            )
             body = f"""
 <div class="grid cols-3">
-  <section class="card"><h2>当前模型</h2><div class="kpi mono">{escape(cfg.agents.defaults.model)}</div><div class="muted">默认会话模型（聊天内可用 /model 切换）</div></section>
-  <section class="card"><h2>命名端点</h2><div class="kpi">{len(endpoint_names)}</div><div class="muted">{escape(', '.join(endpoint_names[:6]) or '未配置')}</div></section>
-  <section class="card"><h2>启用渠道</h2><div class="kpi">{len(enabled_channels)}</div><div class="muted">{escape(', '.join(enabled_channels) or '无')}</div></section>
+  <section class="card"><h2>{t("Current Model", "当前模型")}</h2><div class="kpi mono">{escape(cfg.agents.defaults.model)}</div><div class="muted">{t("Default session model (/model can override per chat)", "默认会话模型（聊天内可用 /model 切换）")}</div></section>
+  <section class="card"><h2>{t("Named Endpoints", "命名端点")}</h2><div class="kpi">{len(endpoint_names)}</div><div class="muted">{escape(', '.join(endpoint_names[:6]) or t('none', '未配置'))}</div></section>
+  <section class="card"><h2>{t("Enabled Channels", "启用渠道")}</h2><div class="kpi">{len(enabled_channels)}</div><div class="muted">{escape(', '.join(enabled_channels) or t('none', '无'))}</div></section>
 </div>
 <div class="split" style="margin-top:14px">
   <section class="card">
-    <h2>运行目录</h2>
+    <h2>{t("Runtime Paths", "运行目录")}</h2>
     <table>
       <tr><th>Config</th><td><code>{escape(str(cfg_path))}</code></td></tr>
-      <tr><th>Env 主文件</th><td><code>{escape(str(get_env_file()))}</code></td></tr>
-      <tr><th>Env 目录</th><td><code>{escape(str(get_env_dir()))}</code></td></tr>
-      <tr><th>全局技能目录</th><td><code>{escape(str(get_global_skills_path()))}</code></td></tr>
-      <tr><th>工作区</th><td><code>{escape(str(cfg.workspace_path))}</code></td></tr>
+      <tr><th>{t("Env main file", "Env 主文件")}</th><td><code>{escape(str(get_env_file()))}</code></td></tr>
+      <tr><th>{t("Env directory", "Env 目录")}</th><td><code>{escape(str(get_env_dir()))}</code></td></tr>
+      <tr><th>{t("Global skills", "全局技能目录")}</th><td><code>{escape(str(get_global_skills_path()))}</code></td></tr>
+      <tr><th>{t("Workspace", "工作区")}</th><td><code>{escape(str(cfg.workspace_path))}</code></td></tr>
+      <tr><th>{t("Media files", "媒体文件数")}</th><td>{media_count}</td></tr>
+      <tr><th>{t("Export files", "导出文件数")}</th><td>{export_count}</td></tr>
     </table>
     <div class="row" style="margin-top:10px">
-      <a class="btn subtle" href="/endpoints">管理模型端点</a>
-      <a class="btn subtle" href="/channels">管理聊天渠道</a>
-      <a class="btn subtle" href="/mcp">管理 MCP</a>
-      <a class="btn subtle" href="/skills">管理技能</a>
+      <a class="btn subtle" href="/endpoints">{t("Manage Models", "管理模型端点")}</a>
+      <a class="btn subtle" href="/channels">{t("Manage Channels", "管理聊天渠道")}</a>
+      <a class="btn subtle" href="/mcp">{t("Manage MCP", "管理 MCP")}</a>
+      <a class="btn subtle" href="/skills">{t("Manage Skills", "管理技能")}</a>
     </div>
   </section>
   <section class="card">
-    <h2>快速诊断（轻量）</h2>
+    <h2>{t("Quick Diagnostics", "快速诊断（轻量）")}</h2>
     <ul class="list small">
       <li>web_search provider: <code>{escape(cfg.tools.web.search.provider)}</code></li>
       <li>MCP servers: {len(mcp_servers)} configured / {len(cfg.tools.mcp_enabled_servers or [])} allowlisted</li>
       <li>aliases: {len(cfg.tools.aliases or {})}</li>
       <li>skills.disabled: {len(cfg.skills.disabled or [])}</li>
-      <li>不可用技能（未禁用）: {len(unavailable_skills)}</li>
+      <li>{t("Unavailable enabled skills", "不可用技能（未禁用）")}: {len(unavailable_skills)}</li>
       <li>Claude Code tool: {"enabled" if cfg.tools.claude_code.enabled else "disabled"}</li>
       <li>history budget: {cfg.agents.defaults.max_history_chars} chars</li>
       <li>memory budget: {cfg.agents.defaults.max_memory_context_chars} chars</li>
       <li>background budget: {cfg.agents.defaults.max_background_context_chars} chars</li>
       <li>reply fallback: <code>{escape(cfg.agents.defaults.auto_reply_fallback_language)}</code></li>
+      <li>{t("default model check", "默认模型检查")}: {'OK' if default_model_ok else 'FAIL'} ({escape(default_model_reason)})</li>
     </ul>
-    <div class="muted">更详细诊断仍建议用命令行 <code>nanobot doctor</code></div>
+    <div class="muted">{t("For full diagnostics, run", "更详细诊断建议使用")} <code>nanobot doctor</code></div>
   </section>
 </div>
 """
-            self._send_html(200, self._page("Dashboard", body, tab="/", msg=msg, err=err))
+            self._send_html(200, self._page(t("Dashboard", "仪表盘"), body, tab="/", msg=msg, err=err))
 
         def _render_endpoints(self, *, msg: str = "", err: str = "") -> None:
             cfg = self._load_config()
@@ -962,15 +1058,34 @@ def run_webui(
                 f'<option value="{escape(v)}" {"selected" if cfg.agents.defaults.auto_reply_fallback_language == v else ""}>{escape(label)}</option>'
                 for v, label in _REPLY_LANGUAGE_OPTIONS
             )
+            default_model_candidates: list[str] = []
+            for ep_name in sorted(cfg.providers.endpoints.keys()):
+                ep = cfg.providers.endpoints[ep_name]
+                if not ep.enabled:
+                    continue
+                for model_name in ep.models or []:
+                    ref = f"{ep_name}/{model_name}"
+                    if ref not in default_model_candidates:
+                        default_model_candidates.append(ref)
+            if cfg.agents.defaults.model not in default_model_candidates:
+                default_model_candidates.insert(0, cfg.agents.defaults.model)
+            default_model_options = "".join(
+                f'<option value="{escape(v)}" {"selected" if v == cfg.agents.defaults.model else ""}>{escape(v)}</option>'
+                for v in default_model_candidates
+            )
+
             helper = f"""
 <section class="card">
-  <h2>默认模型</h2>
+  <h2>{"Default Model" if self._ui_lang == "en" else "默认模型"}</h2>
   <form method="post" class="row">
     <input type="hidden" name="action" value="set_default_model">
-    <input type="text" name="default_model" value="{escape(cfg.agents.defaults.model)}" style="flex:1" placeholder="myopen/qwen-max">
-    <button class="btn primary" type="submit">保存默认模型</button>
+    <select name="default_model_select" style="min-width:380px; flex:1">
+      {default_model_options}
+    </select>
+    <input type="text" name="default_model_custom" style="flex:1" placeholder="custom endpoint/model (optional)">
+    <button class="btn primary" type="submit">{"Save Default Model" if self._ui_lang == "en" else "保存默认模型"}</button>
   </form>
-  <div class="muted">聊天里仍可用 <code>/model endpoint/model</code> 会话级切换。</div>
+  <div class="muted">{"Save action validates endpoint/model availability once before writing config." if self._ui_lang == "en" else "保存时会先做一次 endpoint/model 可用性检测，再写入配置。聊天里仍可用 /model 会话级切换。"}</div>
 </section>
 <section class="card" style="margin-top:14px">
   <h2>语言与搜索策略</h2>
@@ -1036,6 +1151,14 @@ def run_webui(
             cfg = self._load_config()
             channels_json = _pretty_json(cfg.channels.model_dump(by_alias=True))
             channels_dump = cfg.channels.model_dump()
+            tg = cfg.channels.telegram
+            tg_allow_from_csv = ", ".join(tg.allow_from or [])
+            tg_token_is_env = tg.token.strip().startswith("${") and tg.token.strip().endswith("}")
+            tg_allow_env_prefix = "TELEGRAM_ALLOW_FROM"
+            if tg.allow_from and all(v.strip().startswith("${") and v.strip().endswith("}") for v in tg.allow_from):
+                first_key = tg.allow_from[0].strip()[2:-1]
+                if "_" in first_key:
+                    tg_allow_env_prefix = first_key.rsplit("_", 1)[0]
             cards = []
             for name in ["telegram", "discord", "feishu", "dingtalk", "qq", "slack", "whatsapp", "email", "mochat"]:
                 item = channels_dump.get(name) or {}
@@ -1061,6 +1184,49 @@ def run_webui(
 """
                 )
             body = f"""
+<section class="card" style="margin-bottom:14px">
+  <h2>Telegram 快速配置（新手推荐）</h2>
+  <form method="post" class="endpoint-fields">
+    <input type="hidden" name="action" value="save_telegram_quick">
+    <div class="field">
+      <label><input type="checkbox" name="telegram_enabled" {"checked" if tg.enabled else ""}> 启用 Telegram</label>
+    </div>
+    <div class="field">
+      <label>Bot Token 模式</label>
+      <select name="telegram_token_mode">
+        <option value="env" {"selected" if tg_token_is_env else ""}>环境变量占位（推荐）</option>
+        <option value="plain" {"selected" if not tg_token_is_env else ""}>明文（仅本机私用）</option>
+      </select>
+    </div>
+    <div class="field">
+      <label>Token 环境变量名（用于 env 模式）</label>
+      <input type="text" name="telegram_token_env_var" value="TELEGRAM_BOT_TOKEN">
+    </div>
+    <div class="field">
+      <label>Token 明文（仅 plain 模式使用）</label>
+      <input type="text" name="telegram_token_plain" value="">
+    </div>
+    <div class="field full">
+      <label>allowFrom 列表（逗号分隔）</label>
+      <input type="text" name="telegram_allow_from_csv" value="{escape(tg_allow_from_csv)}" placeholder="1173477546, 12345678">
+    </div>
+    <div class="field">
+      <label>allowFrom 存储方式</label>
+      <select name="telegram_allow_from_mode">
+        <option value="env_placeholders">环境变量占位列表（推荐）</option>
+        <option value="plain">明文 ID 列表</option>
+      </select>
+    </div>
+    <div class="field">
+      <label>allowFrom 环境变量前缀（用于 env 占位）</label>
+      <input type="text" name="telegram_allow_from_env_prefix" value="{escape(tg_allow_env_prefix)}" placeholder="TELEGRAM_ALLOW_FROM">
+    </div>
+    <div class="field full row">
+      <button class="btn primary" type="submit">保存 Telegram 快速配置</button>
+      <span class="muted">示例：会写成 <code>${'{'}TELEGRAM_ALLOW_FROM_1{'}'}</code>、<code>${'{'}TELEGRAM_ALLOW_FROM_2{'}'}</code> ...</span>
+    </div>
+  </form>
+</section>
 <div class="split">
   <section class="card">
     <h2>多渠道概览</h2>
@@ -1076,7 +1242,7 @@ def run_webui(
       <li>sendProgress: {'on' if cfg.channels.send_progress else 'off'}</li>
       <li>sendToolHints: {'on' if cfg.channels.send_tool_hints else 'off'}（建议关闭）</li>
       <li>主用 TG 时建议：保持 <code>sendToolHints=false</code></li>
-      <li><code>allowFrom</code> 里的用户 ID / 群组 ID 通常不是敏感信息，可以直接写明文（不必强制放 env）。</li>
+      <li><code>allowFrom</code> 的 ID 通常不是密钥，不需要强制放环境变量；只有你不希望在截图/共享配置里暴露时，才建议改成 env 占位。</li>
     </ul>
     <div class="muted">修改渠道 token/secret 后通常需要重启 gateway 才会生效。</div>
   </section>
@@ -1093,152 +1259,10 @@ def run_webui(
 """
             self._send_html(200, self._page("Channels", body, tab="/channels", msg=msg, err=err))
 
-        def _render_extensions(self, *, msg: str = "", err: str = "") -> None:
-            cfg = self._load_config()
-            tools_json = _pretty_json(cfg.tools.model_dump(by_alias=True))
-            skills_json = _pretty_json(cfg.skills.model_dump(by_alias=True))
-            enabled_builtin_set = {t.strip() for t in (cfg.tools.enabled or []) if t.strip()}
-            using_all_builtins = not enabled_builtin_set
-            alias_lines = "\n".join(f"{k} = {v}" for k, v in sorted((cfg.tools.aliases or {}).items()))
-            diag_warnings = _collect_tool_policy_diagnostics(cfg)
-            mcp_rows = []
-            for name in sorted(cfg.tools.mcp_servers.keys()):
-                srv = cfg.tools.mcp_servers[name]
-                target = srv.url or f"{srv.command} {' '.join(srv.args or [])}".strip()
-                enabled = (
-                    (not cfg.tools.mcp_enabled_servers)
-                    or (name in cfg.tools.mcp_enabled_servers)
-                ) and (name not in (cfg.tools.mcp_disabled_servers or []))
-                mcp_rows.append(
-                    f"<tr><td><code>{escape(name)}</code></td><td>{'<span class=\"pill ok\">enabled</span>' if enabled else '<span class=\"pill off\">filtered</span>'}</td><td class='mono'>{escape(target)}</td></tr>"
-                )
-            skill_rows = _collect_skill_rows(cfg)
-            skill_table = []
-            for s in skill_rows:
-                badge = '<span class="pill ok">available</span>' if s["available"] else '<span class="pill off">missing deps</span>'
-                if s["disabled"]:
-                    badge = '<span class="pill">disabled</span>'
-                skill_table.append(
-                    f"""
-<tr>
-  <td><input type="checkbox" name="enabled_skill" value="{escape(s['name'])}" {"checked" if not s['disabled'] else ""}></td>
-  <td><code>{escape(s['name'])}</code></td>
-  <td>{escape(s['source'])}</td>
-  <td>{badge}</td>
-  <td class="small">{escape(s['requires'])}</td>
-</tr>
-"""
-                )
-            builtin_tool_checks = []
-            for tool_name in _BUILTIN_TOOL_NAMES:
-                checked = using_all_builtins or (tool_name in enabled_builtin_set)
-                builtin_tool_checks.append(
-                    f'<label style="min-width:180px"><input type="checkbox" name="enabled_tool" value="{escape(tool_name)}" {"checked" if checked else ""}> <code>{escape(tool_name)}</code></label>'
-                )
-            body = f"""
-<div class="grid cols-2">
-  <section class="card">
-    <h2>MCP 概览</h2>
-    <table>
-      <tr><th>Server</th><th>Status</th><th>Target</th></tr>
-      {''.join(mcp_rows) or '<tr><td colspan="3" class="muted">未配置 MCP servers</td></tr>'}
-    </table>
-    <form method="post" class="row" style="margin-top:10px">
-      <button class="btn warn" type="submit" name="action" value="apply_recommended_mcp">应用推荐（Exa + docloader）</button>
-    </form>
-    <div class="muted">这会写入 Exa 搜索、docloader 文档解析、以及常用 aliases，不会清空你的其他配置。</div>
-  </section>
-  <section class="card">
-    <h2>策略模板（快捷切换）</h2>
-    <form method="post" class="row">
-      <input type="hidden" name="action" value="apply_tool_policy_preset">
-      <select name="preset" style="min-width:220px">
-        <option value="light">轻量（中文开发默认）</option>
-        <option value="research">研究（全工具 + 全技能）</option>
-        <option value="offline">离线（禁网最小集）</option>
-      </select>
-      <button class="btn warn" type="submit" onclick="return confirm('应用模板会覆盖部分工具/技能策略，继续吗？');">应用模板</button>
-    </form>
-    <div class="muted">模板会重写 tools.enabled / web.search.provider / skills.disabled（以及推荐 MCP 默认项）。</div>
-  </section>
-</div>
-<div class="grid cols-2" style="margin-top:14px">
-  <section class="card">
-    <h2>配置一致性检查</h2>
-    <ul class="list small">
-      {''.join(f'<li>{escape(item)}</li>' for item in diag_warnings) or '<li>未发现明显冲突。</li>'}
-    </ul>
-    <div class="muted">建议保存后再跑一次 <code>nanobot doctor</code> 进行运行时依赖检查。</div>
-  </section>
-  <section class="card">
-    <h2>工具策略（可视化）</h2>
-    <form method="post">
-      <input type="hidden" name="action" value="save_tool_policy">
-      <div class="field">
-        <label><input type="checkbox" name="use_all_builtins" {"checked" if using_all_builtins else ""}> 启用全部内置工具（推荐）</label>
-      </div>
-      <div class="field">
-        <label>内置工具白名单（当上面未勾选时生效）</label>
-        <div class="row">
-          {''.join(builtin_tool_checks)}
-        </div>
-      </div>
-      <div class="field">
-        <label>工具别名（每行一个，格式：<code>alias = target</code>）</label>
-        <textarea name="aliases_text" style="min-height:150px">{escape(alias_lines)}</textarea>
-      </div>
-      <div class="field">
-        <label>MCP 服务过滤（启用列表，逗号分隔；留空=全部）</label>
-        <input type="text" name="mcp_enabled_servers_csv" value="{escape(', '.join(cfg.tools.mcp_enabled_servers or []))}">
-      </div>
-      <div class="field">
-        <label>MCP 服务禁用列表（逗号分隔）</label>
-        <input type="text" name="mcp_disabled_servers_csv" value="{escape(', '.join(cfg.tools.mcp_disabled_servers or []))}">
-      </div>
-      <div class="field">
-        <label>MCP 工具启用列表（逗号分隔；支持原名 / mcp_server_tool / server.tool）</label>
-        <input type="text" name="mcp_enabled_tools_csv" value="{escape(', '.join(cfg.tools.mcp_enabled_tools or []))}">
-      </div>
-      <div class="field">
-        <label>MCP 工具禁用列表（逗号分隔）</label>
-        <input type="text" name="mcp_disabled_tools_csv" value="{escape(', '.join(cfg.tools.mcp_disabled_tools or []))}">
-      </div>
-      <div class="row" style="margin-top:10px">
-        <button class="btn primary" type="submit">保存工具策略</button>
-      </div>
-    </form>
-  </section>
-  <section class="card">
-    <h2>技能管理（启用/禁用）</h2>
-    <form method="post">
-      <input type="hidden" name="action" value="save_skills_enabled">
-      <table>
-        <tr><th></th><th>Skill</th><th>Source</th><th>Status</th><th>Requires</th></tr>
-        {''.join(skill_table) or '<tr><td colspan="5" class="muted">无技能</td></tr>'}
-      </table>
-      <div class="row" style="margin-top:10px"><button class="btn primary" type="submit">保存技能启用状态</button></div>
-    </form>
-  </section>
-</div>
-<div class="grid cols-2" style="margin-top:14px">
-  <form method="post" class="card">
-    <h2>Tools JSON 编辑器</h2>
-    <input type="hidden" name="action" value="save_tools_json">
-    <textarea name="tools_json" style="min-height:420px">{escape(tools_json)}</textarea>
-    <div class="row" style="margin-top:10px"><button class="btn primary" type="submit">保存 Tools</button></div>
-  </form>
-  <form method="post" class="card">
-    <h2>Skills JSON 编辑器</h2>
-    <input type="hidden" name="action" value="save_skills_json">
-    <textarea name="skills_json" style="min-height:420px">{escape(skills_json)}</textarea>
-    <div class="row" style="margin-top:10px"><button class="btn primary" type="submit">保存 Skills</button></div>
-  </form>
-</div>
-"""
-            self._send_html(200, self._page("MCP & Skills", body, tab="/extensions", msg=msg, err=err))
-
         def _render_mcp(self, *, msg: str = "", err: str = "") -> None:
             cfg = self._load_config()
+            zh = self._ui_lang == "zh-CN"
+            t = (lambda en, zh_cn: zh_cn if zh else en)
             mcp_rows = []
             for name in sorted(cfg.tools.mcp_servers.keys()):
                 srv = cfg.tools.mcp_servers[name]
@@ -1264,8 +1288,8 @@ def run_webui(
     <form method="post" class="row">
       <input type="hidden" name="action" value="install_mcp_library">
       <input type="hidden" name="library_id" value="{escape(sid)}">
-      <label class="small"><input type="checkbox" name="overwrite_existing"> overwrite</label>
-      <button class="btn primary" type="submit">Install</button>
+      <label class="small"><input type="checkbox" name="overwrite_existing"> {t("overwrite", "覆盖已有")}</label>
+      <button class="btn primary" type="submit">{t("Install", "安装")}</button>
     </form>
   </td>
 </tr>
@@ -1274,71 +1298,98 @@ def run_webui(
             body = f"""
 <div class="grid cols-2">
   <section class="card">
-    <h2>MCP Servers</h2>
+    <h2>{t("MCP Servers", "MCP 服务")}</h2>
     <table>
-      <tr><th>Server</th><th>Status</th><th>Target (masked)</th></tr>
-      {''.join(mcp_rows) or '<tr><td colspan="3" class="muted">No MCP server configured.</td></tr>'}
+      <tr><th>{t("Server", "服务")}</th><th>{t("Status", "状态")}</th><th>{t("Target (masked)", "目标（脱敏）")}</th></tr>
+      {''.join(mcp_rows) or f'<tr><td colspan="3" class="muted">{t("No MCP server configured.", "尚未配置 MCP 服务。")}</td></tr>'}
     </table>
     <form method="post" class="row" style="margin-top:10px">
       <input type="hidden" name="action" value="apply_recommended_mcp">
-      <button class="btn warn" type="submit">Apply Recommended (Exa + Docloader)</button>
+      <button class="btn warn" type="submit">{t("Apply Recommended (Exa + Docloader)", "应用推荐（Exa + Docloader）")}</button>
     </form>
   </section>
   <section class="card">
-    <h2>Privacy</h2>
+    <h2>{t("Privacy", "隐私说明")}</h2>
     <ul class="list small">
-      <li>Do not place raw API keys directly in JSON where possible.</li>
-      <li>Prefer <code>${'{'}ENV_VAR{'}'}</code> placeholders with <code>~/.nanobot/.env</code>.</li>
-      <li>This page masks sensitive query values in MCP URLs.</li>
+      <li>{t("Do not place raw API keys directly in JSON where possible.", "建议不要在 JSON 里直接写明文 API Key。")}</li>
+      <li>{t("Prefer", "建议使用")} <code>${'{'}ENV_VAR{'}'}</code> + <code>~/.nanobot/.env</code>.</li>
+      <li>{t("This page masks sensitive query values in MCP URLs.", "本页会自动脱敏 MCP URL 中的敏感参数。")}</li>
     </ul>
   </section>
 </div>
 <section class="card" style="margin-top:14px">
-  <h2>MCP Library</h2>
+  <h2>{t("MCP Library", "MCP 库")}</h2>
   <table>
-    <tr><th>Name</th><th>Description</th><th>Server Key</th><th>Action</th></tr>
+    <tr><th>{t("Name", "名称")}</th><th>{t("Description", "说明")}</th><th>{t("Server Key", "服务键")}</th><th>{t("Action", "操作")}</th></tr>
     {''.join(lib_rows)}
   </table>
 </section>
 <section class="card" style="margin-top:14px">
-  <h2>Add Custom MCP Server</h2>
+  <h2>{t("Install From Manifest URL", "从清单 URL 安装")}</h2>
+  <form method="post" class="endpoint-fields">
+    <input type="hidden" name="action" value="install_mcp_from_manifest_url">
+    <div class="field full">
+      <label>{t("Manifest URL (raw JSON list)", "清单 URL（raw JSON 列表）")}</label>
+      <input type="text" name="manifest_url" placeholder="https://raw.githubusercontent.com/.../mcp-library.json">
+    </div>
+    <div class="field">
+      <label>{t("Entry ID", "条目 ID")}</label>
+      <input type="text" name="entry_id" placeholder="exa">
+    </div>
+    <div class="field">
+      <label><input type="checkbox" name="overwrite_existing"> {t("overwrite existing server", "覆盖已有同名服务")}</label>
+    </div>
+    <div class="field full">
+      <button class="btn warn" type="submit">{t("Install Entry", "安装条目")}</button>
+    </div>
+  </form>
+  <div class="muted">{t("Manifest format: [{id,name,server_name,config:{url|command,args,env}}]", "清单格式：[{id,name,server_name,config:{url|command,args,env}}]")}</div>
+</section>
+<section class="card" style="margin-top:14px">
+  <h2>{t("Add Custom MCP Server", "添加自定义 MCP 服务")}</h2>
   <form method="post">
     <input type="hidden" name="action" value="save_custom_mcp">
     <div class="endpoint-fields">
-      <div class="field"><label>Server key</label><input type="text" name="server_name" placeholder="myserver"></div>
-      <div class="field"><label>Mode</label>
+      <div class="field"><label>{t("Server key", "服务键")}</label><input type="text" name="server_name" placeholder="myserver"></div>
+      <div class="field"><label>{t("Mode", "模式")}</label>
         <select name="mode">
-          <option value="url">HTTP URL</option>
-          <option value="stdio">Stdio command</option>
+          <option value="url">{t("HTTP URL", "HTTP URL")}</option>
+          <option value="stdio">{t("Stdio command", "标准输入输出命令")}</option>
         </select>
       </div>
-      <div class="field full"><label>URL (for HTTP mode)</label><input type="text" name="url" placeholder="https://example.com/mcp"></div>
-      <div class="field"><label>Command (for stdio mode)</label><input type="text" name="command" placeholder="uvx"></div>
-      <div class="field"><label>Args (CSV, stdio mode)</label><input type="text" name="args_csv" placeholder="package@latest, --flag"></div>
-      <div class="field full"><label>Env JSON (optional)</label><textarea name="env_json" style="min-height:120px">{{}}</textarea></div>
-      <div class="field"><label><input type="checkbox" name="enable_now" checked> add to enabled servers</label></div>
+      <div class="field full"><label>{t("URL (for HTTP mode)", "URL（HTTP 模式）")}</label><input type="text" name="url" placeholder="https://example.com/mcp"></div>
+      <div class="field"><label>{t("Command (for stdio mode)", "命令（stdio 模式）")}</label><input type="text" name="command" placeholder="uvx"></div>
+      <div class="field"><label>{t("Args (CSV, stdio mode)", "参数（CSV，stdio 模式）")}</label><input type="text" name="args_csv" placeholder="package@latest, --flag"></div>
+      <div class="field full"><label>{t("Env JSON (optional)", "Env JSON（可选）")}</label><textarea name="env_json" style="min-height:120px">{{}}</textarea></div>
+      <div class="field"><label><input type="checkbox" name="enable_now" checked> {t("add to enabled servers", "加入启用服务列表")}</label></div>
     </div>
-    <div class="row"><button class="btn primary" type="submit">Save MCP Server</button></div>
+    <div class="row"><button class="btn primary" type="submit">{t("Save MCP Server", "保存 MCP 服务")}</button></div>
   </form>
 </section>
 <section class="card" style="margin-top:14px">
-  <h2>Consistency Checks</h2>
+  <h2>{t("Consistency Checks", "一致性检查")}</h2>
   <ul class="list small">
-    {''.join(f'<li>{escape(item)}</li>' for item in diag_warnings) or '<li>No obvious conflict found.</li>'}
+    {''.join(f'<li>{escape(item)}</li>' for item in diag_warnings) or f'<li>{t("No obvious conflict found.", "未发现明显冲突。")}</li>'}
   </ul>
 </section>
 """
-            self._send_html(200, self._page("MCP", body, tab="/mcp", msg=msg, err=err))
+            self._send_html(200, self._page(t("MCP", "MCP"), body, tab="/mcp", msg=msg, err=err))
 
         def _render_skills(self, *, msg: str = "", err: str = "") -> None:
             cfg = self._load_config()
+            zh = self._ui_lang == "zh-CN"
+            t = (lambda en, zh_cn: zh_cn if zh else en)
             skill_rows = _collect_skill_rows(cfg)
             known_skills = {str(s["name"]) for s in skill_rows}
             rows_html = []
             for s in skill_rows:
-                badge = '<span class="pill ok">available</span>' if s["available"] else '<span class="pill off">missing deps</span>'
+                badge = (
+                    f'<span class="pill ok">{t("available", "可用")}</span>'
+                    if s["available"]
+                    else f'<span class="pill off">{t("missing deps", "缺少依赖")}</span>'
+                )
                 if s["disabled"]:
-                    badge = '<span class="pill">disabled</span>'
+                    badge = f'<span class="pill">{t("disabled", "已禁用")}</span>'
                 rows_html.append(
                     f"""
 <tr>
@@ -1350,16 +1401,16 @@ def run_webui(
 </tr>
 """
                 )
-            bundle_options = "".join(
-                f'<option value="{escape(k)}">{escape(v["name"])} - {escape(v["desc"])}</option>'
-                for k, v in _SKILL_BUNDLES.items()
-            )
             lib_rows = []
             disabled_set = set(cfg.skills.disabled or [])
             for item in _SKILL_LIBRARY:
                 name = str(item["name"])
                 exists = name in known_skills
-                status = "enabled" if (exists and name not in disabled_set) else ("disabled" if exists else "not installed")
+                status = (
+                    t("enabled", "已启用")
+                    if (exists and name not in disabled_set)
+                    else (t("disabled", "已禁用") if exists else t("not installed", "未安装"))
+                )
                 lib_rows.append(
                     f"""
 <tr>
@@ -1370,7 +1421,7 @@ def run_webui(
     <form method="post" class="row">
       <input type="hidden" name="action" value="enable_skill_from_library">
       <input type="hidden" name="skill_name" value="{escape(name)}">
-      <button class="btn" type="submit">Enable</button>
+      <button class="btn" type="submit">{t("Enable", "启用")}</button>
     </form>
   </td>
 </tr>
@@ -1380,86 +1431,49 @@ def run_webui(
             body = f"""
 <div class="grid cols-2">
   <section class="card">
-    <h2>Skill Library (Local)</h2>
+    <h2>{t("Skill Library (Local)", "技能库（本地）")}</h2>
     <form method="post">
       <input type="hidden" name="action" value="save_skills_enabled">
       <table>
-        <tr><th></th><th>Skill</th><th>Source</th><th>Status</th><th>Requires</th></tr>
-        {''.join(rows_html) or '<tr><td colspan="5" class="muted">No skill found.</td></tr>'}
+        <tr><th></th><th>{t("Skill", "技能")}</th><th>{t("Source", "来源")}</th><th>{t("Status", "状态")}</th><th>{t("Requires", "依赖")}</th></tr>
+        {''.join(rows_html) or f'<tr><td colspan="5" class="muted">{t("No skill found.", "未发现技能。")}</td></tr>'}
       </table>
-      <div class="row" style="margin-top:10px"><button class="btn primary" type="submit">Save Skill Selection</button></div>
+      <div class="row" style="margin-top:10px"><button class="btn primary" type="submit">{t("Save Skill Selection", "保存技能选择")}</button></div>
     </form>
   </section>
   <section class="card">
-    <h2>Skill Bundles</h2>
-    <form method="post" class="row">
-      <input type="hidden" name="action" value="apply_skill_bundle">
-      <select name="bundle" style="min-width:260px">{bundle_options}</select>
-      <button class="btn warn" type="submit">Apply Bundle</button>
-    </form>
-    <div class="muted">Bundle updates <code>skills.disabled</code> for quick onboarding.</div>
+    <h2>{t("Skill Notes", "技能说明")}</h2>
+    <ul class="list small">
+      <li>{t("Keep only skills you actually use to reduce startup checks and noise.", "只保留常用技能，可减少启动检查和日志噪音。")}</li>
+      <li>{t("Missing-dependency skills can stay disabled by default.", "缺少依赖的技能建议默认禁用。")}</li>
+      <li>{t("Use the URL import box below if you want to add third-party skills.", "需要三方技能时，可使用下方 URL 导入。")}</li>
+    </ul>
   </section>
 </div>
 <section class="card" style="margin-top:14px">
-  <h2>Skill Library</h2>
+  <h2>{t("Skill Library", "技能库")}</h2>
   <table>
-    <tr><th>Name</th><th>Description</th><th>Status</th><th>Action</th></tr>
+    <tr><th>{t("Name", "名称")}</th><th>{t("Description", "说明")}</th><th>{t("Status", "状态")}</th><th>{t("Action", "操作")}</th></tr>
     {''.join(lib_rows)}
   </table>
 </section>
 <section class="card" style="margin-top:14px">
-  <h2>Import Skill From URL</h2>
+  <h2>{t("Import Skill From URL", "从 URL 导入技能")}</h2>
   <form method="post" class="endpoint-fields">
     <input type="hidden" name="action" value="import_skill_from_url">
-    <div class="field"><label>Skill name</label><input type="text" name="skill_name" placeholder="my-skill"></div>
+    <div class="field"><label>{t("Skill name", "技能名")}</label><input type="text" name="skill_name" placeholder="my-skill"></div>
     <div class="field"><label>SKILL.md URL</label><input type="text" name="skill_url" placeholder="https://raw.githubusercontent.com/.../SKILL.md"></div>
-    <div class="field full"><button class="btn warn" type="submit">Import</button></div>
+    <div class="field full"><button class="btn warn" type="submit">{t("Import", "导入")}</button></div>
   </form>
 </section>
 <form method="post" class="card" style="margin-top:14px">
-  <h2>Skills JSON (Advanced)</h2>
+  <h2>{t("Skills JSON (Advanced)", "Skills JSON（高级）")}</h2>
   <input type="hidden" name="action" value="save_skills_json">
   <textarea name="skills_json" style="min-height:360px">{escape(skills_json)}</textarea>
-  <div class="row" style="margin-top:10px"><button class="btn primary" type="submit">Save Skills JSON</button></div>
+  <div class="row" style="margin-top:10px"><button class="btn primary" type="submit">{t("Save Skills JSON", "保存 Skills JSON")}</button></div>
 </form>
 """
-            self._send_html(200, self._page("Skills", body, tab="/skills", msg=msg, err=err))
-
-        def _render_tools(self, *, msg: str = "", err: str = "") -> None:
-            cfg = self._load_config()
-            tools_json = _pretty_json(cfg.tools.model_dump(by_alias=True))
-            enabled_builtin_set = {t.strip() for t in (cfg.tools.enabled or []) if t.strip()}
-            using_all_builtins = not enabled_builtin_set
-            alias_lines = "\n".join(f"{k} = {v}" for k, v in sorted((cfg.tools.aliases or {}).items()))
-            builtin_tool_checks = []
-            for tool_name in _BUILTIN_TOOL_NAMES:
-                checked = using_all_builtins or (tool_name in enabled_builtin_set)
-                builtin_tool_checks.append(
-                    f'<label style="min-width:180px"><input type="checkbox" name="enabled_tool" value="{escape(tool_name)}" {"checked" if checked else ""}> <code>{escape(tool_name)}</code></label>'
-                )
-            body = f"""
-<section class="card">
-  <h2>Tool Policy</h2>
-  <form method="post">
-    <input type="hidden" name="action" value="save_tool_policy">
-    <div class="field"><label><input type="checkbox" name="use_all_builtins" {"checked" if using_all_builtins else ""}> Enable all built-in tools</label></div>
-    <div class="field"><label>Built-in tools allowlist (used only when unchecked above)</label><div class="row">{''.join(builtin_tool_checks)}</div></div>
-    <div class="field"><label>Aliases (<code>alias = target</code>, one per line)</label><textarea name="aliases_text" style="min-height:150px">{escape(alias_lines)}</textarea></div>
-    <div class="field"><label>MCP enabled servers (CSV, empty = all)</label><input type="text" name="mcp_enabled_servers_csv" value="{escape(', '.join(cfg.tools.mcp_enabled_servers or []))}"></div>
-    <div class="field"><label>MCP disabled servers (CSV)</label><input type="text" name="mcp_disabled_servers_csv" value="{escape(', '.join(cfg.tools.mcp_disabled_servers or []))}"></div>
-    <div class="field"><label>MCP enabled tools (CSV)</label><input type="text" name="mcp_enabled_tools_csv" value="{escape(', '.join(cfg.tools.mcp_enabled_tools or []))}"></div>
-    <div class="field"><label>MCP disabled tools (CSV)</label><input type="text" name="mcp_disabled_tools_csv" value="{escape(', '.join(cfg.tools.mcp_disabled_tools or []))}"></div>
-    <div class="row" style="margin-top:10px"><button class="btn primary" type="submit">Save Tool Policy</button></div>
-  </form>
-</section>
-<form method="post" class="card" style="margin-top:14px">
-  <h2>Tools JSON (Advanced)</h2>
-  <input type="hidden" name="action" value="save_tools_json">
-  <textarea name="tools_json" style="min-height:360px">{escape(tools_json)}</textarea>
-  <div class="row" style="margin-top:10px"><button class="btn primary" type="submit">Save Tools JSON</button></div>
-</form>
-"""
-            self._send_html(200, self._page("Tools Policy", body, tab="/tools", msg=msg, err=err))
+            self._send_html(200, self._page(t("Skills", "技能"), body, tab="/skills", msg=msg, err=err))
 
         def _render_media(self, *, msg: str = "", err: str = "") -> None:
             cfg = self._load_config()
@@ -1573,12 +1587,23 @@ def run_webui(
             cfg = self._load_config()
             action = self._form_str(form, "action")
             if action == "set_default_model":
-                model = self._form_str(form, "default_model").strip()
+                model = (
+                    self._form_str(form, "default_model_custom").strip()
+                    or self._form_str(form, "default_model_select").strip()
+                    or self._form_str(form, "default_model").strip()
+                )
                 if not model:
                     raise ValueError("default_model 不能为空")
+                ok, reason = _check_default_model_ref(
+                    load_config(cfg_path, apply_profiles=False, resolve_env=True),
+                    model,
+                    probe_remote=True,
+                )
+                if not ok:
+                    raise ValueError(f"默认模型检测失败: {reason}")
                 cfg.agents.defaults.model = model
                 self._save_config(cfg)
-                self._redirect("/endpoints", msg="默认模型已保存")
+                self._redirect("/endpoints", msg=f"默认模型已保存（检测通过: {reason}）")
                 return
 
             if action == "set_agent_preferences":
@@ -1683,13 +1708,41 @@ def run_webui(
         def _handle_post_channels(self, form: dict[str, list[str]]) -> None:
             cfg = self._load_config()
             action = self._form_str(form, "action")
-            if action != "save_channels_json":
-                raise ValueError("Unsupported channels action")
-            raw = self._form_str(form, "channels_json")
-            data = _safe_json_object(raw, "channels")
-            cfg.channels = ChannelsConfig.model_validate(data)
-            self._save_config(cfg)
-            self._redirect("/channels", msg="Channels 配置已保存（如改了 token/secret，请重启 gateway）")
+            if action == "save_telegram_quick":
+                tg = cfg.channels.telegram
+                tg.enabled = self._form_bool(form, "telegram_enabled")
+
+                token_mode = self._form_str(form, "telegram_token_mode", "env").strip()
+                token_env_var = self._form_str(form, "telegram_token_env_var", "TELEGRAM_BOT_TOKEN").strip() or "TELEGRAM_BOT_TOKEN"
+                token_plain = self._form_str(form, "telegram_token_plain").strip()
+                if token_mode == "plain":
+                    if token_plain:
+                        tg.token = token_plain
+                else:
+                    tg.token = f"${{{token_env_var}}}"
+
+                allow_from_items = [x.strip() for x in self._form_str(form, "telegram_allow_from_csv", "").replace("\n", ",").split(",") if x.strip()]
+                allow_mode = self._form_str(form, "telegram_allow_from_mode", "env_placeholders").strip()
+                env_prefix = self._form_str(form, "telegram_allow_from_env_prefix", "TELEGRAM_ALLOW_FROM").strip() or "TELEGRAM_ALLOW_FROM"
+                if allow_mode == "plain":
+                    tg.allow_from = allow_from_items
+                else:
+                    tg.allow_from = [f"${{{env_prefix}_{idx + 1}}}" for idx, _ in enumerate(allow_from_items)]
+
+                cfg.channels.telegram = tg
+                self._save_config(cfg)
+                self._redirect("/channels", msg="Telegram 快速配置已保存（如改 token，请重启 gateway）")
+                return
+
+            if action == "save_channels_json":
+                raw = self._form_str(form, "channels_json")
+                data = _safe_json_object(raw, "channels")
+                cfg.channels = ChannelsConfig.model_validate(data)
+                self._save_config(cfg)
+                self._redirect("/channels", msg="Channels 配置已保存（如改了 token/secret，请重启 gateway）")
+                return
+
+            raise ValueError("Unsupported channels action")
 
         def _handle_post_mcp(self, form: dict[str, list[str]]) -> None:
             cfg = self._load_config()
@@ -1715,6 +1768,39 @@ def run_webui(
                 cfg.tools.mcp_enabled_servers = _merge_unique(cfg.tools.mcp_enabled_servers, [name])
                 self._save_config(cfg)
                 self._redirect("/mcp", msg=f"Installed MCP library entry: {name}")
+                return
+
+            if action == "install_mcp_from_manifest_url":
+                manifest_url = self._form_str(form, "manifest_url").strip()
+                entry_id = self._form_str(form, "entry_id").strip()
+                overwrite = self._form_bool(form, "overwrite_existing")
+                if not manifest_url:
+                    raise ValueError("manifest_url is required")
+                if not entry_id:
+                    raise ValueError("entry_id is required")
+                payload = _fetch_public_json(manifest_url)
+                if not isinstance(payload, list):
+                    raise ValueError("manifest JSON must be an array")
+                selected = None
+                for item in payload:
+                    if isinstance(item, dict) and str(item.get("id", "")).strip() == entry_id:
+                        selected = item
+                        break
+                if not selected:
+                    raise ValueError(f"entry_id not found in manifest: {entry_id}")
+                server_name = str(selected.get("server_name", "")).strip()
+                config_obj = selected.get("config")
+                if not server_name:
+                    raise ValueError("manifest entry missing server_name")
+                if not isinstance(config_obj, dict):
+                    raise ValueError("manifest entry missing config object")
+                if server_name in cfg.tools.mcp_servers and not overwrite:
+                    self._redirect("/mcp", err=f"MCP server '{server_name}' already exists. Enable overwrite to replace.")
+                    return
+                cfg.tools.mcp_servers[server_name] = MCPServerConfig.model_validate(config_obj)
+                cfg.tools.mcp_enabled_servers = _merge_unique(cfg.tools.mcp_enabled_servers, [server_name])
+                self._save_config(cfg)
+                self._redirect("/mcp", msg=f"Installed MCP from manifest: {server_name}")
                 return
 
             if action == "save_custom_mcp":
@@ -1774,11 +1860,23 @@ def run_webui(
                 skill_url = self._form_str(form, "skill_url").strip()
                 if not skill_name:
                     raise ValueError("skill_name is required")
-                if not skill_url.startswith("https://"):
-                    raise ValueError("skill_url must start with https://")
+                parsed = urlparse(skill_url)
+                if parsed.scheme != "https":
+                    raise ValueError("skill_url must use https://")
+                if not parsed.hostname:
+                    raise ValueError("skill_url must include host")
+                if _is_private_or_local_host(parsed.hostname):
+                    raise ValueError("skill_url host must be public")
                 try:
-                    with urllib.request.urlopen(skill_url, timeout=20) as resp:
-                        content = resp.read().decode("utf-8", errors="replace")
+                    req = urllib.request.Request(skill_url, headers={"User-Agent": "nanobot-webui/0.1"})
+                    with urllib.request.urlopen(req, timeout=20) as resp:
+                        content_type = (resp.headers.get("Content-Type") or "").lower()
+                        if content_type and "text" not in content_type and "markdown" not in content_type:
+                            raise ValueError("skill_url must return text/markdown content")
+                        content = resp.read(_MAX_SKILL_IMPORT_BYTES + 1)
+                        if len(content) > _MAX_SKILL_IMPORT_BYTES:
+                            raise ValueError("skill file is too large (max 512KB)")
+                        content = content.decode("utf-8", errors="replace")
                 except urllib.error.URLError as e:
                     raise ValueError(f"failed to fetch skill URL: {e}") from e
                 if "# " not in content and "SKILL" not in content.upper():
@@ -1801,19 +1899,6 @@ def run_webui(
                 self._redirect("/skills", msg="Skill selection saved")
                 return
 
-            if action == "apply_skill_bundle":
-                bundle = self._form_str(form, "bundle", "starter").strip()
-                profile = _SKILL_BUNDLES.get(bundle)
-                if not profile:
-                    raise ValueError(f"Unknown skill bundle: {bundle}")
-                rows = _collect_skill_rows(cfg)
-                all_known = {row["name"] for row in rows}
-                disable = {s for s in profile["disable"] if s in all_known}
-                cfg.skills.disabled = sorted(disable)
-                self._save_config(cfg)
-                self._redirect("/skills", msg=f"Skill bundle applied: {bundle}")
-                return
-
             if action == "save_tools_json":
                 data = _safe_json_object(self._form_str(form, "tools_json"), "tools")
                 cfg.tools = ToolsConfig.model_validate(data)
@@ -1829,52 +1914,6 @@ def run_webui(
                 return
 
             raise ValueError("Unsupported skills action")
-
-        def _handle_post_tools(self, form: dict[str, list[str]]) -> None:
-            cfg = self._load_config()
-            action = self._form_str(form, "action")
-
-            if action == "apply_tool_policy_preset":
-                preset = self._form_str(form, "preset", "light").strip().lower()
-                _apply_tool_policy_preset(cfg, preset)
-                self._save_config(cfg)
-                self._redirect("/tools", msg=f"Policy preset applied: {preset}")
-                return
-
-            if action == "save_tool_policy":
-                use_all_builtins = self._form_bool(form, "use_all_builtins")
-                selected_tools = [s.strip() for s in form.get("enabled_tool", []) if s.strip()]
-                cfg.tools.enabled = [] if use_all_builtins else selected_tools
-
-                cfg.tools.aliases = _parse_alias_lines(self._form_str(form, "aliases_text", ""))
-                cfg.tools.mcp_enabled_servers = _parse_csv(self._form_str(form, "mcp_enabled_servers_csv", ""))
-                cfg.tools.mcp_disabled_servers = _parse_csv(self._form_str(form, "mcp_disabled_servers_csv", ""))
-                cfg.tools.mcp_enabled_tools = _parse_csv(self._form_str(form, "mcp_enabled_tools_csv", ""))
-                cfg.tools.mcp_disabled_tools = _parse_csv(self._form_str(form, "mcp_disabled_tools_csv", ""))
-
-                self._save_config(cfg)
-                self._redirect("/tools", msg="Tool policy saved")
-                return
-
-            if action == "save_tools_json":
-                data = _safe_json_object(self._form_str(form, "tools_json"), "tools")
-                cfg.tools = ToolsConfig.model_validate(data)
-                self._save_config(cfg)
-                self._redirect("/tools", msg="Tools config saved")
-                return
-
-            raise ValueError("Unsupported tools action")
-
-        def _handle_post_extensions(self, form: dict[str, list[str]]) -> None:
-            """Legacy compatibility endpoint; route by action into new pages."""
-            action = self._form_str(form, "action")
-            if action in {"apply_recommended_mcp", "install_mcp_library"}:
-                return self._handle_post_mcp(form)
-            if action in {"save_skills_enabled", "apply_skill_bundle", "save_skills_json"}:
-                return self._handle_post_skills(form)
-            if action in {"save_tool_policy", "apply_tool_policy_preset", "save_tools_json"}:
-                return self._handle_post_tools(form)
-            raise ValueError("Unsupported extensions action")
 
         def _handle_post_media(self, form: dict[str, list[str]]) -> None:
             action = self._form_str(form, "action")
