@@ -28,18 +28,18 @@ echo "=== Running non-interactive diagnostics inside gateway ==="
 run_gateway_cmd() {
   local output_file="$1"
   shift
-  timeout -k 5s 60s docker compose exec -T nanobot-gateway "$@" >"$output_file" 2>&1
+  timeout -k 5s 60s docker compose exec -T nanobot-gateway sh -lc "$*" >"$output_file" 2>&1
 }
 
 STATUS_FILE="/tmp/nanobot_status_smoke.txt"
 DOCTOR_FILE="/tmp/nanobot_doctor_smoke.txt"
 
-if ! run_gateway_cmd "$STATUS_FILE" nanobot status; then
+if ! run_gateway_cmd "$STATUS_FILE" 'nanobot status > /tmp/nanobot_status_smoke.txt 2>&1 && cat /tmp/nanobot_status_smoke.txt'; then
   echo "  FAIL: nanobot status timed out or failed"
   cat "$STATUS_FILE" || true
   exit 1
 fi
-if ! run_gateway_cmd "$DOCTOR_FILE" nanobot doctor; then
+if ! run_gateway_cmd "$DOCTOR_FILE" 'nanobot doctor > /tmp/nanobot_doctor_smoke.txt 2>&1 && cat /tmp/nanobot_doctor_smoke.txt'; then
   echo "  FAIL: nanobot doctor timed out or failed"
   cat "$DOCTOR_FILE" || true
   exit 1
