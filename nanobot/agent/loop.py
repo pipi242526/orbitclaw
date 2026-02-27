@@ -14,7 +14,9 @@ from loguru import logger
 
 from nanobot.agent.context import ContextBuilder
 from nanobot.agent.memory import MemoryStore
+from nanobot.agent.policy_pipeline import PolicyPipeline
 from nanobot.agent.subagent import SubagentManager
+from nanobot.agent.toolset_builder import ToolsetBuilder
 from nanobot.agent.tooling import (
     is_mcp_server_enabled,
     is_tool_enabled,
@@ -25,26 +27,16 @@ from nanobot.agent.tooling import (
     truncate_tool_output,
 )
 from nanobot.agent.tools.cron import CronTool
-from nanobot.agent.tools.claude_code import ClaudeCodeTool
-from nanobot.agent.tools.alias import install_tool_aliases
-from nanobot.agent.tools.export import ExportFileTool
-from nanobot.agent.tools.filesystem import EditFileTool, ListDirTool, ReadFileTool, WriteFileTool
-from nanobot.agent.tools.media import FilesHubTool
 from nanobot.agent.tools.message import MessageTool
 from nanobot.agent.tools.registry import ToolRegistry
-from nanobot.agent.tools.shell import ExecTool
 from nanobot.agent.tools.spawn import SpawnTool
 from nanobot.agent.tools.web import (
-    WeatherTool,
-    WebFetchTool,
     has_exa_search_mcp,
-    install_exa_web_search_alias,
 )
 from nanobot.bus.events import InboundMessage, OutboundMessage
 from nanobot.bus.queue import MessageBus
 from nanobot.providers.base import LLMProvider
 from nanobot.session.manager import Session, SessionManager
-from nanobot.utils.helpers import get_exports_dir, get_media_dir
 
 if TYPE_CHECKING:
     from nanobot.config.schema import ClaudeCodeToolConfig, ExecToolConfig
@@ -143,6 +135,13 @@ class AgentLoop:
         )
         self.memory_store = MemoryStore(workspace)
         self.tools = ToolRegistry()
+        self.toolset = ToolsetBuilder(
+            workspace=workspace,
+            restrict_to_workspace=restrict_to_workspace,
+            enabled_tools=self.enabled_tools,
+            exec_timeout=self.exec_config.timeout,
+            files_hub_exports_dir=self.files_hub_exports_dir,
+        )
         self._mcp_servers = mcp_servers or {}
         self._mcp_enabled_servers = normalize_name_set(mcp_enabled_servers)
         self._mcp_disabled_servers = normalize_name_set(mcp_disabled_servers)
@@ -174,6 +173,13 @@ class AgentLoop:
             enabled_tools=enabled_tools,
             files_hub_exports_dir=self.files_hub_exports_dir,
         )
+        self.policy = PolicyPipeline(
+            provider=self.provider,
+            context=self.context,
+            default_model=self.model,
+            max_tokens=self.max_tokens,
+            strip_think=self._strip_think,
+        )
 
         self._running = False
         self._mcp_stack: AsyncExitStack | None = None
@@ -204,93 +210,33 @@ class AgentLoop:
 
     def _register_default_tools(self) -> None:
         """Register the default set of tools."""
-        allowed_dir = self.workspace if self.restrict_to_workspace else None
-        exports_dir = get_exports_dir(self.files_hub_exports_dir)
-        extra_read_dirs = [get_media_dir(), exports_dir] if self.restrict_to_workspace else None
-        file_tools = (
-            ("read_file", ReadFileTool),
-            ("write_file", WriteFileTool),
-            ("edit_file", EditFileTool),
-            ("list_dir", ListDirTool),
+        self.toolset.register_core_tools(self.tools)
+        self._register_web_search_tool_initial()
+        self.toolset.register_agent_extras(
+            self.tools,
+            send_callback=self.bus.publish_outbound,
+            spawn_manager=self.subagents,
+            cron_service=self.cron_service,
+            claude_code_config=self.claude_code_config,
         )
-        for name, cls in file_tools:
-            if self._tool_enabled(name):
-                if name in {"read_file", "list_dir"}:
-                    self.tools.register(
-                        cls(
-                            workspace=self.workspace,
-                            allowed_dir=allowed_dir,
-                            extra_allowed_dirs=extra_read_dirs,
-                        )
-                    )
-                else:
-                    self.tools.register(cls(workspace=self.workspace, allowed_dir=allowed_dir))
-
-        if self._tool_enabled("exec"):
-            self.tools.register(ExecTool(
-                working_dir=str(self.workspace),
-                timeout=self.exec_config.timeout,
-                restrict_to_workspace=self.restrict_to_workspace,
-            ))
-
-        if self._tool_enabled("web_search"):
-            self._register_web_search_tool_initial()
-
-        if self._tool_enabled("web_fetch"):
-            self.tools.register(WebFetchTool())
-        if self._tool_enabled("files_hub"):
-            self.tools.register(FilesHubTool(exports_dir=exports_dir))
-        if self._tool_enabled("export_file"):
-            self.tools.register(ExportFileTool(exports_dir=exports_dir))
-        if self._tool_enabled("weather"):
-            self.tools.register(WeatherTool())
-        if self._tool_enabled("claude_code") and self.claude_code_config and self.claude_code_config.enabled:
-            self.tools.register(
-                ClaudeCodeTool(
-                    workspace=self.workspace,
-                    config=self.claude_code_config,
-                    restrict_to_workspace=self.restrict_to_workspace,
-                )
-            )
-        if self._tool_enabled("message"):
-            self.tools.register(MessageTool(send_callback=self.bus.publish_outbound))
-        if self._tool_enabled("spawn"):
-            self.tools.register(SpawnTool(manager=self.subagents))
-        if self.cron_service and self._tool_enabled("cron"):
-            self.tools.register(CronTool(self.cron_service))
         self._apply_configured_tool_aliases(stage="startup")
 
     def _register_web_search_tool_initial(self) -> None:
-        if not self._tool_enabled("web_search"):
-            return
-        if self.web_search_provider == "disabled":
-            logger.info("web_search provider is disabled; skipping web_search tool registration")
-            return
-        if self.web_search_provider == "exa_mcp" and not self._exa_mcp_configured:
-            logger.warning("web_search provider is exa_mcp but no Exa MCP server is configured; web_search unavailable")
-            return
-        if self._prefer_exa_mcp_web_search:
-            logger.info("Exa MCP detected; deferring built-in web_search registration until MCP connects")
-            return
-        logger.warning("web_search enabled but Exa MCP is not configured; web_search unavailable")
+        self.toolset.register_web_search_initial(
+            web_search_provider=self.web_search_provider,
+            exa_mcp_configured=self._exa_mcp_configured,
+            prefer_exa_mcp_web_search=self._prefer_exa_mcp_web_search,
+        )
 
     def _install_exa_web_search_alias_if_available(self) -> bool:
-        if not self._tool_enabled("web_search"):
-            return False
-        wrapped = install_exa_web_search_alias(self.tools)
-        if not wrapped:
-            return False
-        logger.info("Registered web_search compatibility alias -> {}", wrapped)
-        return True
+        return self.toolset.install_exa_web_search_alias(self.tools)
 
     def _apply_configured_tool_aliases(self, stage: str) -> None:
-        if not self.tool_aliases:
-            return
-        summary = install_tool_aliases(self.tools, self.tool_aliases)
-        if summary["installed"]:
-            logger.info("Configured tool aliases applied ({}): {}", stage, ", ".join(summary["installed"]))
-        if summary["unresolved"]:
-            logger.debug("Configured tool aliases unresolved ({}): {}", stage, ", ".join(summary["unresolved"]))
+        self.toolset.apply_configured_aliases(
+            self.tools,
+            aliases=self.tool_aliases,
+            stage=stage,
+        )
 
     async def _connect_mcp(self) -> None:
         """Connect to configured MCP servers (one-time, lazy)."""
@@ -347,6 +293,19 @@ class AgentLoop:
             return None
         return re.sub(r"<think>[\s\S]*?</think>", "", text).strip() or None
 
+    async def _enforce_reply_language(
+        self,
+        *,
+        user_message: str,
+        draft_reply: str,
+        model: str | None,
+    ) -> str:
+        return await self.policy.enforce_final_reply(
+            user_message=user_message,
+            draft_reply=draft_reply,
+            model=model,
+        )
+
     @staticmethod
     def _tool_hint(tool_calls: list) -> str:
         """Format tool calls as concise hint, e.g. 'web_search("query")'."""
@@ -386,52 +345,28 @@ class AgentLoop:
         )
 
     def _format_user_error(self, err: Exception) -> str:
-        """Return a user-facing failure message with reason and likely fixes."""
-        raw = str(err).strip() or err.__class__.__name__
-        reason = raw
-        fixes: list[str] = []
-        lower = raw.lower()
+        return self.policy.format_user_error(err)
 
-        if "tool '" in lower and "not found" in lower:
-            fixes.extend([
-                "检查 tools.enabled 是否把该工具禁用了",
-                "检查 tools.aliases 是否映射到不存在的目标工具",
-                "检查 MCP server/tool 过滤项（mcpEnabled*/mcpDisabled*）是否把工具过滤掉了",
-            ])
-        elif "web_search_exa" in lower or ("exa" in lower and "mcp" in lower and "search" in lower):
-            fixes.extend([
-                "使用 Exa MCP：tools.web.search.provider = exa_mcp",
-                "检查 tools.mcpServers.exa 和 mcpEnabledTools 是否已启用 web_search_exa",
-            ])
-        elif "mcp" in lower and "timed out" in lower:
-            fixes.extend([
-                "检查对应 MCP 服务是否可用（命令/网络）",
-                "适当增大 tools.mcpServers.<name>.toolTimeout",
-                "先缩小请求范围（更短网页/更小文件/更精确查询）",
-            ])
-        elif "no module named" in lower:
-            fixes.extend([
-                "安装缺失的 Python 依赖后重试",
-                "如果是可选功能依赖，先禁用对应工具/技能",
-            ])
-        elif "timeout" in lower:
-            fixes.extend([
-                "缩小任务范围后重试",
-                "检查网络和目标服务状态",
-            ])
-        else:
-            fixes.extend([
-                "运行 `nanobot doctor` 查看工具/技能依赖和配置问题",
-                "检查 MCP 配置、API Key、模型名是否正确",
-            ])
+    @staticmethod
+    def _resolve_reply_to(metadata: dict[str, Any] | None) -> str | None:
+        if not isinstance(metadata, dict):
+            return None
+        value = metadata.get("message_id") or metadata.get("reply_to")
+        return str(value) if value is not None and str(value).strip() else None
 
-        lines = [
-            "处理失败。",
-            f"原因: {reason}",
-            "建议:",
-        ]
-        lines.extend(f"{i}. {fix}" for i, fix in enumerate(fixes, 1))
-        return "\n".join(lines)
+    @staticmethod
+    def _collect_media_paths(msg: InboundMessage) -> list[str]:
+        """Collect attachment file paths for prompt routing, preserving legacy media support."""
+        paths: list[str] = []
+        for path in (msg.media or []):
+            if isinstance(path, str) and path:
+                paths.append(path)
+        for item in (msg.attachments or []):
+            if isinstance(item, dict):
+                path = item.get("path")
+                if isinstance(path, str) and path and path not in paths:
+                    paths.append(path)
+        return paths
 
     def _maybe_release_memory(self, active_session_key: str | None = None) -> None:
         """Periodic lightweight cleanup for long-running gateway processes."""
@@ -449,6 +384,7 @@ class AgentLoop:
         initial_messages: list[dict],
         on_progress: Callable[[str], Awaitable[None]] | None = None,
         model: str | None = None,
+        emit_tool_hints: bool = True,
     ) -> tuple[str | None, list[str]]:
         """Run the agent iteration loop. Returns (final_content, tools_used)."""
         messages = initial_messages
@@ -474,7 +410,10 @@ class AgentLoop:
                     if clean:
                         await on_progress(clean)
                     else:
-                        await on_progress(self._tool_hint(response.tool_calls))
+                        if emit_tool_hints:
+                            await on_progress(self._tool_hint(response.tool_calls))
+                        else:
+                            await on_progress(self._processing_notice_text())
 
                 tool_call_dicts = [
                     {
@@ -532,7 +471,9 @@ class AgentLoop:
                     await self.bus.publish_outbound(OutboundMessage(
                         channel=msg.channel,
                         chat_id=msg.chat_id,
-                        content=self._format_user_error(e)
+                        content=self._format_user_error(e),
+                        reply_to=self._resolve_reply_to(msg.metadata),
+                        metadata=msg.metadata or {},
                     ))
                 finally:
                     self._maybe_release_memory(active_session_key=msg.session_key)
@@ -593,6 +534,16 @@ class AgentLoop:
 
         preview = msg.content[:80] + "..." if len(msg.content) > 80 else msg.content
         logger.info("Processing message from {}:{}: {}", msg.channel, msg.sender_id, preview)
+        reply_to_id = self._resolve_reply_to(msg.metadata)
+
+        def _mk_out(content: str, *, metadata: dict[str, Any] | None = None) -> OutboundMessage:
+            return OutboundMessage(
+                channel=msg.channel,
+                chat_id=msg.chat_id,
+                content=content,
+                reply_to=reply_to_id,
+                metadata=metadata if metadata is not None else (msg.metadata or {}),
+            )
 
         key = session_key or msg.session_key
         session = self.sessions.get_or_create(key)
@@ -614,16 +565,10 @@ class AgentLoop:
                             archive_all=True,
                             model=self._effective_model_for_session(session),
                         ):
-                            return OutboundMessage(
-                                channel=msg.channel, chat_id=msg.chat_id,
-                                content="Memory archival failed, session not cleared. Please try again.",
-                            )
+                            return _mk_out("Memory archival failed, session not cleared. Please try again.")
             except Exception:
                 logger.exception("/new archival failed for {}", session.key)
-                return OutboundMessage(
-                    channel=msg.channel, chat_id=msg.chat_id,
-                    content="Memory archival failed, session not cleared. Please try again.",
-                )
+                return _mk_out("Memory archival failed, session not cleared. Please try again.")
             finally:
                 self._consolidating.discard(session.key)
                 self._prune_consolidation_lock(session.key, lock)
@@ -631,11 +576,9 @@ class AgentLoop:
             session.clear()
             self.sessions.save(session)
             self.sessions.invalidate(session.key)
-            return OutboundMessage(channel=msg.channel, chat_id=msg.chat_id,
-                                  content="New session started.")
+            return _mk_out("New session started.")
         if cmd == "/help":
-            return OutboundMessage(channel=msg.channel, chat_id=msg.chat_id,
-                                  content="🐈 nanobot commands:\n/new — Start a new conversation\n/model — Show or switch model for this session\n/help — Show available commands")
+            return _mk_out("🐈 nanobot commands:\n/new — Start a new conversation\n/model — Show or switch model for this session\n/help — Show available commands")
 
         if cmd == "/model" or cmd.startswith("/model "):
             current_model = self._effective_model_for_session(session)
@@ -653,43 +596,29 @@ class AgentLoop:
                             endpoint_lines.append(f"- {name}: {preview}{more}")
                         else:
                             endpoint_lines.append(f"- {name}: `{name}/<model>` (任意模型名)")
-                return OutboundMessage(
-                    channel=msg.channel,
-                    chat_id=msg.chat_id,
-                    content=(
-                        "当前模型设置\n"
-                        f"- 生效模型: `{current_model}` ({source})\n"
-                        f"- 默认模型: `{self.model}`\n\n"
-                        "用法:\n"
-                        "- `/model provider/model-name` 切换当前会话模型\n"
-                        "- `/model reset` 恢复默认模型"
-                        + ("\n" + "\n".join(endpoint_lines) if endpoint_lines else "")
-                    ),
+                return _mk_out(
+                    "当前模型设置\n"
+                    f"- 生效模型: `{current_model}` ({source})\n"
+                    f"- 默认模型: `{self.model}`\n\n"
+                    "用法:\n"
+                    "- `/model provider/model-name` 切换当前会话模型\n"
+                    "- `/model reset` 恢复默认模型"
+                    + ("\n" + "\n".join(endpoint_lines) if endpoint_lines else "")
                 )
             if arg.lower() in {"reset", "default"}:
                 session.metadata.pop("model_override", None)
                 self.sessions.save(session)
-                return OutboundMessage(
-                    channel=msg.channel, chat_id=msg.chat_id,
-                    content=f"已恢复默认模型: `{self.model}`",
-                )
+                return _mk_out(f"已恢复默认模型: `{self.model}`")
             try:
                 ok, detail = self.provider.prepare_model(arg)
             except Exception as e:
                 ok, detail = False, str(e)
             if not ok:
-                return OutboundMessage(
-                    channel=msg.channel,
-                    chat_id=msg.chat_id,
-                    content=f"模型切换失败: {detail or '未知错误'}",
-                )
+                return _mk_out(f"模型切换失败: {detail or '未知错误'}")
             session.metadata["model_override"] = arg
             self.sessions.save(session)
             extra = f"\n路由: {detail}" if detail else ""
-            return OutboundMessage(
-                channel=msg.channel, chat_id=msg.chat_id,
-                content=f"当前会话模型已切换为: `{arg}`\n提示: 仅影响当前会话（{session.key}）。{extra}",
-            )
+            return _mk_out(f"当前会话模型已切换为: `{arg}`\n提示: 仅影响当前会话（{session.key}）。{extra}")
 
         unconsolidated = len(session.messages) - session.last_consolidated
         if (unconsolidated >= self.memory_window and session.key not in self._consolidating):
@@ -721,7 +650,7 @@ class AgentLoop:
         initial_messages = self.context.build_messages(
             history=session.get_history(max_messages=self.memory_window),
             current_message=msg.content,
-            media=msg.media if msg.media else None,
+            media=self._collect_media_paths(msg) or None,
             channel=msg.channel, chat_id=msg.chat_id,
         )
         effective_model = self._effective_model_for_session(session)
@@ -733,7 +662,11 @@ class AgentLoop:
             meta = dict(msg.metadata or {})
             meta["_progress"] = True
             await self.bus.publish_outbound(OutboundMessage(
-                channel=msg.channel, chat_id=msg.chat_id, content=content, metadata=meta,
+                channel=msg.channel,
+                chat_id=msg.chat_id,
+                content=content,
+                reply_to=reply_to_id,
+                metadata=meta,
             ))
 
         processing_notice_task: asyncio.Task | None = None
@@ -748,6 +681,7 @@ class AgentLoop:
                         channel=msg.channel,
                         chat_id=msg.chat_id,
                         content=self._processing_notice_text(),
+                        reply_to=reply_to_id,
                         metadata=meta,
                     ))
                 except asyncio.CancelledError:
@@ -756,7 +690,10 @@ class AgentLoop:
 
         try:
             final_content, tools_used = await self._run_agent_loop(
-                initial_messages, on_progress=on_progress or _bus_progress, model=effective_model,
+                initial_messages,
+                on_progress=on_progress or _bus_progress,
+                model=effective_model,
+                emit_tool_hints=(msg.channel == "cli"),
             )
         finally:
             if processing_notice_task and not processing_notice_task.done():
@@ -768,6 +705,11 @@ class AgentLoop:
 
         if final_content is None:
             final_content = "I've completed processing but have no response to give."
+        final_content = await self._enforce_reply_language(
+            user_message=msg.content,
+            draft_reply=final_content,
+            model=effective_model,
+        )
 
         preview = final_content[:120] + "..." if len(final_content) > 120 else final_content
         logger.info("Response to {}:{}: {}", msg.channel, msg.sender_id, preview)
@@ -781,10 +723,7 @@ class AgentLoop:
             if isinstance(message_tool, MessageTool) and message_tool._sent_in_turn:
                 return None
 
-        return OutboundMessage(
-            channel=msg.channel, chat_id=msg.chat_id, content=final_content,
-            metadata=msg.metadata or {},
-        )
+        return _mk_out(final_content)
 
     async def _consolidate_memory(self, session, archive_all: bool = False, model: str | None = None) -> bool:
         """Delegate to MemoryStore.consolidate(). Returns True on success."""

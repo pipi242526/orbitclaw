@@ -2,6 +2,24 @@
 
 This fork follows a pragmatic, lightweight engineering policy.
 
+## 0) Project Iron Laws (Non-negotiable)
+
+1. Resource law:
+   - Every release must keep explicit budget ceilings for free memory, per-turn token usage, tool timeout, and queue length.
+   - New features cannot ship without budget impact notes.
+2. Output law:
+   - Final output must follow the configured language strategy.
+   - Internal tool/MCP invocation details must not leak to end users by default.
+   - Failures must include reason and actionable fix suggestions.
+3. Interface law:
+   - Keep one unified message contract (`reply_to`, `actions`, `attachments`).
+   - Channel adapters only map protocol differences; they must not own business logic.
+4. Configuration law:
+   - Environment variables first, plaintext secrets minimized.
+   - Every config mutation path must be reversible (clear fallback or rollback path).
+5. Extension law:
+   - New channel / MCP / skill integrations must be plug-in style, with zero invasive changes to the core agent loop.
+
 ## 1) Priorities
 
 1. Bot core behavior first (gateway/chat/tools), WebUI second.
@@ -46,4 +64,3 @@ This fork follows a pragmatic, lightweight engineering policy.
 1. No heavy framework expansion without a concrete production need.
 2. No duplicate tools for the same job.
 3. No permanent compatibility code if active usage has migrated.
-

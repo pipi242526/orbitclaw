@@ -1,7 +1,15 @@
 from pathlib import Path
-from unittest.mock import MagicMock
+from unittest.mock import AsyncMock, MagicMock
 
+import pytest
+
+from nanobot.agent.loop import AgentLoop
 from nanobot.agent.context import ContextBuilder
+from nanobot.agent.policy_pipeline import PolicyPipeline
+from nanobot.agent.toolset_builder import ToolsetBuilder
+from nanobot.agent.tools.registry import ToolRegistry
+from nanobot.bus.queue import MessageBus
+from nanobot.providers.base import LLMResponse
 
 
 def test_detect_reply_language_prefers_chinese_for_cjk_text():
@@ -15,6 +23,11 @@ def test_runtime_context_contains_language_hint():
     assert "Reply Language Hint: zh-CN" in ctx
     assert "Channel: telegram" in ctx
     assert "Chat ID: 123" in ctx
+
+
+def test_context_resolve_reply_language_target(tmp_path: Path):
+    ctx = ContextBuilder(tmp_path, reply_language_preference="ja")
+    assert ctx.resolve_reply_language_target("请读取这张图") == "ja"
 
 
 def test_runtime_context_contains_japan_search_locale_hint():
@@ -108,3 +121,109 @@ def test_compact_background_text_uses_structural_summary(tmp_path: Path):
     assert len(compacted) <= 220
     assert "auto-compacted" in compacted
     assert "IMPORTANT" in compacted
+
+
+def test_detect_runtime_environment_supports_explicit_override():
+    kind, hint = ContextBuilder._detect_runtime_environment(override="docker")
+    assert kind == "docker"
+    assert "NANOBOT_RUNTIME_KIND" in hint
+
+
+def test_detect_runtime_environment_detects_kubernetes_marker():
+    kind, hint = ContextBuilder._detect_runtime_environment(
+        dockerenv_exists=False,
+        cgroup_text="0::/kubepods.slice/pod123",
+    )
+    assert kind == "kubernetes"
+    assert "kubepods" in hint
+
+
+def test_toolset_builder_registers_shared_core_tools(tmp_path: Path):
+    tools = ToolRegistry()
+    builder = ToolsetBuilder(
+        workspace=tmp_path,
+        restrict_to_workspace=False,
+        enabled_tools=set(),
+        exec_timeout=30,
+    )
+
+    builder.register_core_tools(tools)
+    names = set(tools.tool_names)
+
+    assert {
+        "read_file",
+        "write_file",
+        "edit_file",
+        "list_dir",
+        "exec",
+        "web_fetch",
+        "files_hub",
+        "export_file",
+        "weather",
+    }.issubset(names)
+    assert "message" not in names
+    assert "spawn" not in names
+
+
+def test_policy_pipeline_formats_missing_tool_error(tmp_path: Path):
+    provider = MagicMock()
+    provider.get_default_model.return_value = "test-model"
+    ctx = ContextBuilder(tmp_path)
+    pipeline = PolicyPipeline(
+        provider=provider,
+        context=ctx,
+        default_model="test-model",
+        max_tokens=1024,
+        strip_think=lambda text: text,
+    )
+
+    msg = pipeline.format_user_error(RuntimeError("Error: Tool 'doc_read' not found"))
+    assert "tools.enabled" in msg
+    assert "tools.aliases" in msg
+
+
+@pytest.mark.asyncio
+async def test_reply_language_guard_rewrites_english_draft_for_chinese_user(tmp_path: Path):
+    bus = MessageBus()
+    provider = MagicMock()
+    provider.get_default_model.return_value = "test-model"
+    provider.chat = AsyncMock(
+        return_value=LLMResponse(content="图片里是注册成功提示，并包含绑定链接。", tool_calls=[])
+    )
+    loop = AgentLoop(bus=bus, provider=provider, workspace=tmp_path, model="test-model")
+
+    draft = "The screenshot shows a successful registration notice and a claim URL."
+    rewritten = await loop._enforce_reply_language(
+        user_message="请帮我识图并总结",
+        draft_reply=draft,
+        model="test-model",
+    )
+
+    assert "注册成功" in rewritten
+    provider.chat.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_reply_language_guard_skips_code_heavy_reply(tmp_path: Path):
+    bus = MessageBus()
+    provider = MagicMock()
+    provider.get_default_model.return_value = "test-model"
+    provider.chat = AsyncMock(return_value=LLMResponse(content="不应被调用", tool_calls=[]))
+    loop = AgentLoop(bus=bus, provider=provider, workspace=tmp_path, model="test-model")
+
+    draft = (
+        "Use this script:\n"
+        "```python\n"
+        "def parse_image(path):\n"
+        "    return summarize(path)\n"
+        "```\n"
+        "Run it and check output."
+    )
+    rewritten = await loop._enforce_reply_language(
+        user_message="请看下这张图",
+        draft_reply=draft,
+        model="test-model",
+    )
+
+    assert rewritten == draft
+    provider.chat.assert_not_awaited()

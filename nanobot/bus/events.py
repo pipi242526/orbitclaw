@@ -15,6 +15,7 @@ class InboundMessage:
     content: str  # Message text
     timestamp: datetime = field(default_factory=datetime.now)
     media: list[str] = field(default_factory=list)  # Media URLs
+    attachments: list[dict[str, Any]] = field(default_factory=list)  # Structured attachments (path/name/type/source)
     metadata: dict[str, Any] = field(default_factory=dict)  # Channel-specific data
     
     @property
@@ -32,6 +33,7 @@ class OutboundMessage:
     content: str
     reply_to: str | None = None
     media: list[str] = field(default_factory=list)
+    attachments: list[dict[str, Any]] = field(default_factory=list)  # Structured outbound attachments
+    actions: list[dict[str, Any]] = field(default_factory=list)  # Optional interactive actions (title/id/value)
     metadata: dict[str, Any] = field(default_factory=dict)
-
 

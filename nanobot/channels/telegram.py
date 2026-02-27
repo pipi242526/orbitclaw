@@ -4,9 +4,11 @@ from __future__ import annotations
 
 import asyncio
 import re
+import secrets
+import time
 from loguru import logger
-from telegram import BotCommand, Update, ReplyParameters
-from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
+from telegram import BotCommand, Update, ReplyParameters, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram.ext import Application, CallbackQueryHandler, CommandHandler, MessageHandler, filters, ContextTypes
 from telegram.request import HTTPXRequest
 
 from nanobot.bus.events import OutboundMessage
@@ -127,6 +129,7 @@ class TelegramChannel(BaseChannel):
         self._app: Application | None = None
         self._chat_ids: dict[str, int] = {}  # Map sender_id to chat_id for replies
         self._typing_tasks: dict[str, asyncio.Task] = {}  # chat_id -> typing loop task
+        self._callback_registry: dict[str, dict] = {}
     
     async def start(self) -> None:
         """Start the Telegram bot with long polling."""
@@ -148,6 +151,7 @@ class TelegramChannel(BaseChannel):
         self._app.add_handler(CommandHandler("start", self._on_start))
         self._app.add_handler(CommandHandler("new", self._forward_command))
         self._app.add_handler(CommandHandler("help", self._on_help))
+        self._app.add_handler(CallbackQueryHandler(self._on_callback_query))
         
         # Add message handler for text, photos, voice, documents
         self._app.add_handler(
@@ -176,7 +180,7 @@ class TelegramChannel(BaseChannel):
         
         # Start polling (this runs until stopped)
         await self._app.updater.start_polling(
-            allowed_updates=["message"],
+            allowed_updates=["message", "callback_query"],
             drop_pending_updates=True  # Ignore old messages on startup
         )
         
@@ -187,6 +191,7 @@ class TelegramChannel(BaseChannel):
     async def stop(self) -> None:
         """Stop the Telegram bot."""
         self._running = False
+        self._callback_registry.clear()
         
         # Cancel all typing indicators
         for chat_id in list(self._typing_tasks):
@@ -226,16 +231,30 @@ class TelegramChannel(BaseChannel):
             return
 
         reply_params = None
-        if self.config.reply_to_message:
-            reply_to_message_id = msg.metadata.get("message_id")
-            if reply_to_message_id:
+        resolved_reply_to = msg.reply_to
+        if not resolved_reply_to:
+            resolved_reply_to = msg.metadata.get("reply_to") or msg.metadata.get("message_id")
+        if not resolved_reply_to and self.config.reply_to_message:
+            resolved_reply_to = msg.metadata.get("message_id")
+        if resolved_reply_to:
+            try:
                 reply_params = ReplyParameters(
-                    message_id=reply_to_message_id,
+                    message_id=int(resolved_reply_to),
                     allow_sending_without_reply=True
                 )
+            except Exception:
+                logger.debug("Invalid Telegram reply target ignored: {}", resolved_reply_to)
+
+        reply_markup = self._build_inline_keyboard(msg.actions, str(chat_id))
+        media_items = list(msg.media or [])
+        for item in (msg.attachments or []):
+            if isinstance(item, dict):
+                path = item.get("path")
+                if isinstance(path, str) and path and path not in media_items:
+                    media_items.append(path)
 
         # Send media files
-        for media_path in (msg.media or []):
+        for media_path in media_items:
             try:
                 media_type = self._get_media_type(media_path)
                 sender = {
@@ -261,25 +280,140 @@ class TelegramChannel(BaseChannel):
 
         # Send text content
         if msg.content and msg.content != "[empty message]":
-            for chunk in _split_message(msg.content):
+            for i, chunk in enumerate(_split_message(msg.content)):
                 try:
                     html = _markdown_to_telegram_html(chunk)
-                    await self._app.bot.send_message(
-                        chat_id=chat_id, 
-                        text=html, 
-                        parse_mode="HTML",
-                        reply_parameters=reply_params
-                    )
+                    kwargs = {
+                        "chat_id": chat_id,
+                        "text": html,
+                        "parse_mode": "HTML",
+                        "reply_parameters": reply_params,
+                    }
+                    if i == 0 and reply_markup:
+                        kwargs["reply_markup"] = reply_markup
+                    await self._app.bot.send_message(**kwargs)
                 except Exception as e:
                     logger.warning("HTML parse failed, falling back to plain text: {}", e)
                     try:
-                        await self._app.bot.send_message(
-                            chat_id=chat_id, 
-                            text=chunk,
-                            reply_parameters=reply_params
-                        )
+                        kwargs = {
+                            "chat_id": chat_id,
+                            "text": chunk,
+                            "reply_parameters": reply_params,
+                        }
+                        if i == 0 and reply_markup:
+                            kwargs["reply_markup"] = reply_markup
+                        await self._app.bot.send_message(**kwargs)
                     except Exception as e2:
                         logger.error("Error sending Telegram message: {}", e2)
+
+    def _build_inline_keyboard(self, actions: list[dict] | None, chat_id: str) -> InlineKeyboardMarkup | None:
+        """Build inline keyboard from outbound actions and bind nonce callbacks."""
+        if not self.config.inline_actions or not actions:
+            return None
+
+        rows: list[list[InlineKeyboardButton]] = []
+        for idx, raw in enumerate(actions[:12]):
+            if not isinstance(raw, dict):
+                continue
+            title = str(raw.get("title") or raw.get("text") or raw.get("label") or "").strip()
+            if not title:
+                title = f"Option {idx + 1}"
+            action_id = str(raw.get("id") or raw.get("value") or title).strip()
+            payload = {
+                "id": action_id,
+                "title": title,
+                "value": raw.get("value"),
+                "prompt": raw.get("prompt"),
+            }
+            token = self._mint_callback_token(chat_id=chat_id, payload=payload)
+            rows.append([InlineKeyboardButton(text=title, callback_data=f"nb:{token}")])
+
+        return InlineKeyboardMarkup(rows) if rows else None
+
+    def _mint_callback_token(self, *, chat_id: str, payload: dict) -> str:
+        """Create one-time callback token with TTL to prevent replay."""
+        self._cleanup_callback_registry()
+        ttl = max(30, int(self.config.callback_ttl_seconds or 0))
+        token = secrets.token_urlsafe(9)
+        while token in self._callback_registry:
+            token = secrets.token_urlsafe(9)
+        self._callback_registry[token] = {
+            "chat_id": str(chat_id),
+            "payload": payload,
+            "expires_at": time.time() + ttl,
+        }
+        return token
+
+    def _cleanup_callback_registry(self) -> None:
+        now = time.time()
+        expired = [key for key, item in self._callback_registry.items() if float(item.get("expires_at", 0.0)) <= now]
+        for key in expired:
+            self._callback_registry.pop(key, None)
+        # Hard cap to avoid unbounded memory growth if callbacks are never consumed.
+        if len(self._callback_registry) > 4096:
+            keys = sorted(
+                self._callback_registry.keys(),
+                key=lambda k: float(self._callback_registry[k].get("expires_at", 0.0)),
+            )
+            for key in keys[: len(self._callback_registry) - 2048]:
+                self._callback_registry.pop(key, None)
+
+    async def _on_callback_query(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Handle inline keyboard callback with nonce+TTL replay protection."""
+        _ = context
+        query = update.callback_query
+        if not query:
+            return
+        data = (query.data or "").strip()
+        if not data.startswith("nb:"):
+            await query.answer("Unsupported action", show_alert=False)
+            return
+
+        token = data[3:]
+        entry = self._callback_registry.pop(token, None)
+        if not entry:
+            await query.answer("Action expired, please retry.", show_alert=False)
+            return
+        if float(entry.get("expires_at", 0.0)) <= time.time():
+            await query.answer("Action expired, please retry.", show_alert=False)
+            return
+
+        message = query.message
+        if not message:
+            await query.answer("Message context missing.", show_alert=False)
+            return
+        if str(message.chat_id) != str(entry.get("chat_id")):
+            await query.answer("Action is not valid in this chat.", show_alert=False)
+            return
+
+        await query.answer("Received", show_alert=False)
+        sender = update.effective_user
+        sender_id = self._sender_id(sender) if sender else "unknown"
+        action = entry.get("payload", {})
+        content = str(action.get("prompt") or action.get("value") or action.get("title") or action.get("id") or "")
+        if not content:
+            content = "button_clicked"
+
+        self._start_typing(str(message.chat_id))
+        await self._handle_message(
+            sender_id=sender_id,
+            chat_id=str(message.chat_id),
+            content=content,
+            metadata={
+                "message_id": message.message_id,
+                "reply_to": message.message_id,
+                "user_id": sender.id if sender else None,
+                "username": sender.username if sender else None,
+                "first_name": sender.first_name if sender else None,
+                "is_group": message.chat.type != "private",
+                "callback_action": {
+                    "id": action.get("id"),
+                    "title": action.get("title"),
+                    "value": action.get("value"),
+                    "token": token,
+                },
+            },
+        )
     
     async def _on_start(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Handle /start command."""
@@ -313,10 +447,20 @@ class TelegramChannel(BaseChannel):
         """Forward slash commands to the bus for unified handling in AgentLoop."""
         if not update.message or not update.effective_user:
             return
+        message = update.message
+        user = update.effective_user
         await self._handle_message(
-            sender_id=self._sender_id(update.effective_user),
-            chat_id=str(update.message.chat_id),
-            content=update.message.text,
+            sender_id=self._sender_id(user),
+            chat_id=str(message.chat_id),
+            content=message.text,
+            metadata={
+                "message_id": message.message_id,
+                "reply_to": message.reply_to_message.message_id if message.reply_to_message else None,
+                "user_id": user.id,
+                "username": user.username,
+                "first_name": user.first_name,
+                "is_group": message.chat.type != "private",
+            },
         )
     
     async def _on_message(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -335,6 +479,7 @@ class TelegramChannel(BaseChannel):
         # Build content from text and/or media
         content_parts = []
         media_paths = []
+        attachments: list[dict] = []
         
         # Text content
         if message.text:
@@ -381,6 +526,15 @@ class TelegramChannel(BaseChannel):
                 await file.download_to_drive(str(file_path))
                 
                 media_paths.append(str(file_path))
+                attachments.append(
+                    {
+                        "path": str(file_path),
+                        "name": original_name or file_path.name,
+                        "kind": media_type,
+                        "mime_type": mime_type or "",
+                        "source": "telegram",
+                    }
+                )
                 
                 # Handle voice transcription
                 if media_type == "voice" or media_type == "audio":
@@ -417,8 +571,10 @@ class TelegramChannel(BaseChannel):
             chat_id=str_chat_id,
             content=content,
             media=media_paths,
+            attachments=attachments,
             metadata={
                 "message_id": message.message_id,
+                "reply_to": message.reply_to_message.message_id if message.reply_to_message else None,
                 "user_id": user.id,
                 "username": user.username,
                 "first_name": user.first_name,

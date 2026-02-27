@@ -1193,6 +1193,9 @@ nanobot/
 
 PRs welcome! The codebase is intentionally small and readable. 🤗
 
+Before opening large feature PRs, please follow the fork's engineering guardrails:
+- [DEVELOPMENT_RULES.md](./DEVELOPMENT_RULES.md) (Project Iron Laws: resource/output/interface/config/extension)
+
 **Roadmap** — Pick an item and [open a PR](https://github.com/HKUDS/nanobot/pulls)!
 
 - [ ] **Multi-modal** — See and hear (images, voice, video)

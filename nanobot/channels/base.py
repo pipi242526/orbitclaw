@@ -89,6 +89,7 @@ class BaseChannel(ABC):
         chat_id: str,
         content: str,
         media: list[str] | None = None,
+        attachments: list[dict[str, Any]] | None = None,
         metadata: dict[str, Any] | None = None
     ) -> None:
         """
@@ -101,6 +102,7 @@ class BaseChannel(ABC):
             chat_id: The chat/channel identifier.
             content: Message text content.
             media: Optional list of media URLs.
+            attachments: Optional structured attachment objects.
             metadata: Optional channel-specific metadata.
         """
         if not self.is_allowed(sender_id):
@@ -111,12 +113,19 @@ class BaseChannel(ABC):
             )
             return
         
+        media_paths = list(media or [])
+        structured_attachments = list(attachments or [])
+        if media_paths and not structured_attachments:
+            # Backward-compatible fallback: derive attachment objects from media paths.
+            structured_attachments = [{"path": path} for path in media_paths if isinstance(path, str) and path]
+
         msg = InboundMessage(
             channel=self.name,
             sender_id=str(sender_id),
             chat_id=str(chat_id),
             content=content,
-            media=media or [],
+            media=media_paths,
+            attachments=structured_attachments,
             metadata=metadata or {}
         )
         

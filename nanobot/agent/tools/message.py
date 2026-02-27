@@ -61,10 +61,32 @@ class MessageTool(Tool):
                     "type": "string",
                     "description": "Optional: target chat/user ID"
                 },
+                "reply_to": {
+                    "type": "string",
+                    "description": "Optional: reply target message id/thread id (channel-specific)"
+                },
                 "media": {
                     "type": "array",
                     "items": {"type": "string"},
                     "description": "Optional: list of file paths to attach (images, audio, documents)"
+                },
+                "attachments": {
+                    "type": "array",
+                    "description": "Optional: structured attachments (e.g. [{\"path\":\"/tmp/a.pdf\",\"name\":\"a.pdf\"}])",
+                    "items": {"type": "object"}
+                },
+                "actions": {
+                    "type": "array",
+                    "description": "Optional interactive actions, e.g. [{\"id\":\"opt_a\",\"title\":\"Option A\"}]",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "id": {"type": "string"},
+                            "title": {"type": "string"},
+                            "value": {"type": "string"},
+                            "prompt": {"type": "string"},
+                        },
+                    },
                 }
             },
             "required": ["content"]
@@ -76,12 +98,15 @@ class MessageTool(Tool):
         channel: str | None = None,
         chat_id: str | None = None,
         message_id: str | None = None,
+        reply_to: str | None = None,
         media: list[str] | None = None,
+        attachments: list[dict[str, Any]] | None = None,
+        actions: list[dict[str, Any]] | None = None,
         **kwargs: Any
     ) -> str:
         channel = channel or self._default_channel
         chat_id = chat_id or self._default_chat_id
-        message_id = message_id or self._default_message_id
+        resolved_reply_to = reply_to or message_id or self._default_message_id
 
         if not channel or not chat_id:
             return "Error: No target channel/chat specified"
@@ -89,13 +114,24 @@ class MessageTool(Tool):
         if not self._send_callback:
             return "Error: Message sending not configured"
 
+        normalized_attachments = list(attachments or [])
+        normalized_media = list(media or [])
+        for item in normalized_attachments:
+            if isinstance(item, dict):
+                path = item.get("path")
+                if isinstance(path, str) and path and path not in normalized_media:
+                    normalized_media.append(path)
+
         msg = OutboundMessage(
             channel=channel,
             chat_id=chat_id,
             content=content,
-            media=media or [],
+            reply_to=str(resolved_reply_to) if resolved_reply_to else None,
+            media=normalized_media,
+            attachments=normalized_attachments,
+            actions=list(actions or []),
             metadata={
-                "message_id": message_id,
+                "message_id": resolved_reply_to,
             }
         )
 

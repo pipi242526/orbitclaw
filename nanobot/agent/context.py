@@ -2,6 +2,7 @@
 
 import base64
 import mimetypes
+import os
 import platform
 import re
 import time
@@ -201,8 +202,7 @@ Skills with available="false" need dependencies installed first - you can try in
         workspace_path = str(self.workspace.expanduser().resolve())
         from nanobot.utils.helpers import get_global_skills_path
         global_skills_path = str(get_global_skills_path())
-        system = platform.system()
-        runtime = f"{'macOS' if system == 'Darwin' else system} {platform.machine()}, Python {platform.python_version()}"
+        runtime = self._build_runtime_summary()
         
         return f"""# nanobot 🐈
 
@@ -243,6 +243,68 @@ Attachment routing (prefer lightweight tools first):
 - Web pages/articles/docs: try `web_fetch` first; only switch to enhanced MCP fetch/browser tools when built-in extraction fails
 When remembering something important, write to {workspace_path}/memory/MEMORY.md
 To recall past events, grep {workspace_path}/memory/HISTORY.md"""
+
+    @classmethod
+    def _build_runtime_summary(cls) -> str:
+        """Build a compact runtime summary for system prompt context."""
+        system = platform.system()
+        os_label = "macOS" if system == "Darwin" else system
+        arch = platform.machine()
+        py_ver = platform.python_version()
+        runtime_kind, runtime_hint = cls._detect_runtime_environment()
+        return (
+            f"{os_label} {arch}, Python {py_ver}\n"
+            f"- Environment: {runtime_kind}\n"
+            f"- Runtime Hint: {runtime_hint}"
+        )
+
+    @staticmethod
+    def _detect_runtime_environment(
+        *,
+        override: str | None = None,
+        dockerenv_exists: bool | None = None,
+        cgroup_text: str | None = None,
+    ) -> tuple[str, str]:
+        """Detect whether nanobot runs in host or container-like environment."""
+        forced = (override if override is not None else os.getenv("NANOBOT_RUNTIME_KIND", "")).strip().lower()
+        forced_aliases = {
+            "local": "host",
+            "host": "host",
+            "docker": "docker",
+            "container": "container",
+            "k8s": "kubernetes",
+            "kubernetes": "kubernetes",
+        }
+        if forced in forced_aliases:
+            normalized = forced_aliases[forced]
+            return normalized, f"forced by NANOBOT_RUNTIME_KIND={forced}"
+
+        if dockerenv_exists is None:
+            dockerenv_exists = Path("/.dockerenv").exists()
+        if dockerenv_exists:
+            return "docker", "detected /.dockerenv"
+
+        if cgroup_text is None:
+            try:
+                cgroup_text = Path("/proc/1/cgroup").read_text(encoding="utf-8", errors="ignore")
+            except Exception:
+                cgroup_text = ""
+
+        low = (cgroup_text or "").lower()
+        markers = (
+            "docker",
+            "containerd",
+            "kubepods",
+            "kubelet",
+            "podman",
+            "lxc",
+        )
+        for marker in markers:
+            if marker in low:
+                kind = "kubernetes" if marker in {"kubepods", "kubelet"} else "container"
+                return kind, f"detected cgroup marker '{marker}'"
+
+        return "host", "no container marker detected"
 
     @staticmethod
     def _normalize_language_code(value: str | None) -> str:
@@ -406,6 +468,17 @@ To recall past events, grep {workspace_path}/memory/HISTORY.md"""
             lines.append(f"Channel: {channel}")
             lines.append(f"Chat ID: {chat_id}")
         return "\n".join(lines)
+
+    def resolve_reply_language_target(self, message: str) -> str | None:
+        """Resolve concrete target language for the final reply, or None for same-as-user."""
+        lang_code, _ = self._detect_reply_language(
+            message or "",
+            preferred_language=self.reply_language_preference,
+            fallback_language=self.auto_reply_fallback_language,
+        )
+        if lang_code == "same_as_user":
+            return None
+        return lang_code
 
     @staticmethod
     def _append_runtime_context(

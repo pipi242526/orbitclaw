@@ -12,9 +12,9 @@ from loguru import logger
 from nanobot.bus.events import InboundMessage
 from nanobot.bus.queue import MessageBus
 from nanobot.providers.base import LLMProvider
+from nanobot.agent.toolset_builder import ToolsetBuilder
 from nanobot.agent.tooling import (
     is_mcp_server_enabled,
-    is_tool_enabled,
     normalize_name_set,
     normalize_tool_aliases,
     normalize_web_search_provider,
@@ -22,18 +22,9 @@ from nanobot.agent.tooling import (
     truncate_tool_output,
 )
 from nanobot.agent.tools.registry import ToolRegistry
-from nanobot.agent.tools.alias import install_tool_aliases
-from nanobot.agent.tools.export import ExportFileTool
-from nanobot.agent.tools.filesystem import ReadFileTool, WriteFileTool, EditFileTool, ListDirTool
-from nanobot.agent.tools.media import FilesHubTool
-from nanobot.agent.tools.shell import ExecTool
 from nanobot.agent.tools.web import (
-    WeatherTool,
-    WebFetchTool,
     has_exa_search_mcp,
-    install_exa_web_search_alias,
 )
-from nanobot.utils.helpers import get_exports_dir, get_media_dir
 
 
 class SubagentManager:
@@ -91,11 +82,15 @@ class SubagentManager:
         self.tool_aliases = normalize_tool_aliases(tool_aliases)
         self.enabled_tools = normalize_name_set(enabled_tools)
         self.files_hub_exports_dir = files_hub_exports_dir or ""
+        self.toolset = ToolsetBuilder(
+            workspace=self.workspace,
+            restrict_to_workspace=self.restrict_to_workspace,
+            enabled_tools=self.enabled_tools,
+            exec_timeout=self.exec_config.timeout,
+            files_hub_exports_dir=self.files_hub_exports_dir,
+        )
         self._running_tasks: dict[str, asyncio.Task[None]] = {}
     
-    def _tool_enabled(self, name: str) -> bool:
-        return is_tool_enabled(self.enabled_tools, name)
-
     def _mcp_server_enabled(self, name: str) -> bool:
         return is_mcp_server_enabled(
             name,
@@ -164,45 +159,8 @@ class SubagentManager:
             async with AsyncExitStack() as mcp_stack:
                 # Build subagent tools (no message tool, no spawn tool)
                 tools = ToolRegistry()
-                allowed_dir = self.workspace if self.restrict_to_workspace else None
-                exports_dir = get_exports_dir(self.files_hub_exports_dir)
-                extra_read_dirs = [get_media_dir(), exports_dir] if self.restrict_to_workspace else None
-                if self._tool_enabled("read_file"):
-                    tools.register(
-                        ReadFileTool(
-                            workspace=self.workspace,
-                            allowed_dir=allowed_dir,
-                            extra_allowed_dirs=extra_read_dirs,
-                        )
-                    )
-                if self._tool_enabled("write_file"):
-                    tools.register(WriteFileTool(workspace=self.workspace, allowed_dir=allowed_dir))
-                if self._tool_enabled("edit_file"):
-                    tools.register(EditFileTool(workspace=self.workspace, allowed_dir=allowed_dir))
-                if self._tool_enabled("list_dir"):
-                    tools.register(
-                        ListDirTool(
-                            workspace=self.workspace,
-                            allowed_dir=allowed_dir,
-                            extra_allowed_dirs=extra_read_dirs,
-                        )
-                    )
-                if self._tool_enabled("exec"):
-                    tools.register(ExecTool(
-                        working_dir=str(self.workspace),
-                        timeout=self.exec_config.timeout,
-                        restrict_to_workspace=self.restrict_to_workspace,
-                    ))
-                if self._tool_enabled("web_search"):
-                    self._register_subagent_web_search_initial(tools)
-                if self._tool_enabled("web_fetch"):
-                    tools.register(WebFetchTool())
-                if self._tool_enabled("files_hub"):
-                    tools.register(FilesHubTool(exports_dir=exports_dir))
-                if self._tool_enabled("export_file"):
-                    tools.register(ExportFileTool(exports_dir=exports_dir))
-                if self._tool_enabled("weather"):
-                    tools.register(WeatherTool())
+                self.toolset.register_core_tools(tools)
+                self._register_subagent_web_search_initial()
                 self._apply_configured_tool_aliases(tools, stage="startup")
 
                 if self._mcp_servers:
@@ -216,7 +174,7 @@ class SubagentManager:
                         enabled_tools=self._mcp_enabled_tools or None,
                         disabled_tools=self._mcp_disabled_tools or None,
                     )
-                    if self._prefer_exa_mcp_web_search and self._tool_enabled("web_search"):
+                    if self._prefer_exa_mcp_web_search and self.toolset.tool_enabled("web_search"):
                         if not self._install_exa_web_search_alias_if_available(tools):
                             logger.warning(
                                 "Subagent [{}]: Exa MCP is configured but 'web_search_exa' tool was not registered",
@@ -298,39 +256,24 @@ class SubagentManager:
             logger.error("Subagent [{}] failed: {}", task_id, e)
             await self._announce_result(task_id, label, task, error_msg, origin, "error")
 
-    def _register_subagent_web_search_initial(self, tools: ToolRegistry) -> None:
-        if not self._tool_enabled("web_search"):
-            return
-        if self.web_search_provider == "disabled":
-            logger.info("Subagent: web_search provider is disabled; skipping web_search tool registration")
-            return
-        if self.web_search_provider == "exa_mcp" and not self._exa_mcp_configured:
-            logger.warning(
-                "Subagent: web_search provider is exa_mcp but no Exa MCP server is configured; web_search unavailable"
-            )
-            return
-        if self._prefer_exa_mcp_web_search:
-            logger.info("Subagent: Exa MCP detected; deferring built-in web_search registration until MCP connects")
-            return
-        logger.warning("Subagent: web_search enabled but Exa MCP is not configured; web_search unavailable")
+    def _register_subagent_web_search_initial(self) -> None:
+        self.toolset.register_web_search_initial(
+            web_search_provider=self.web_search_provider,
+            exa_mcp_configured=self._exa_mcp_configured,
+            prefer_exa_mcp_web_search=self._prefer_exa_mcp_web_search,
+            owner="Subagent",
+        )
 
     def _install_exa_web_search_alias_if_available(self, tools: ToolRegistry) -> bool:
-        if not self._tool_enabled("web_search"):
-            return False
-        wrapped = install_exa_web_search_alias(tools)
-        if not wrapped:
-            return False
-        logger.info("Subagent: registered web_search compatibility alias -> {}", wrapped)
-        return True
+        return self.toolset.install_exa_web_search_alias(tools, owner="Subagent")
 
     def _apply_configured_tool_aliases(self, tools: ToolRegistry, stage: str) -> None:
-        if not self.tool_aliases:
-            return
-        summary = install_tool_aliases(tools, self.tool_aliases)
-        if summary["installed"]:
-            logger.info("Subagent: configured tool aliases applied ({}): {}", stage, ", ".join(summary["installed"]))
-        if summary["unresolved"]:
-            logger.debug("Subagent: configured tool aliases unresolved ({}): {}", stage, ", ".join(summary["unresolved"]))
+        self.toolset.apply_configured_aliases(
+            tools,
+            aliases=self.tool_aliases,
+            stage=stage,
+            owner="Subagent",
+        )
     
     async def _announce_result(
         self,
