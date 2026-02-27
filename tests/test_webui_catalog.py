@@ -35,3 +35,6 @@ def test_install_skill_from_library_to_global_dir(monkeypatch, tmp_path):
     ok2, msg2 = install_skill_from_library("weather", overwrite=False)
     assert not ok2
     assert "already exists" in msg2
+
+    ok3, msg3 = install_skill_from_library("weather", overwrite=True)
+    assert ok3, msg3

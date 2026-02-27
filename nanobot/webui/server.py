@@ -1669,6 +1669,8 @@ def run_webui(
             for item in _SKILL_LIBRARY:
                 name = str(item["name"])
                 exists = name in known_skills
+                global_skill_file = get_global_skills_path() / name / "SKILL.md"
+                global_installed = global_skill_file.exists()
                 health = evaluate_skill_library_health(cfg, item, skill_rows)
                 health_label_map = {
                     "ready": t("ready", "就绪"),
@@ -1678,29 +1680,38 @@ def run_webui(
                 }
                 health_label = health_label_map.get(health["status"], health["label"])
                 health_class = "ok" if health["status"] == "ready" else "off"
-                action_html = (
-                    f"""
+                action_parts: list[str] = []
+                if not global_installed:
+                    action_parts.append(
+                        f"""
+<form method="post" class="row">
+  <input type="hidden" name="action" value="install_skill_library">
+  <input type="hidden" name="library_skill_id" value="{escape(str(item['id']))}">
+  <button class="btn primary" type="submit">{t("Install to Global", "安装到全局")}</button>
+</form>
+"""
+                    )
+                if exists:
+                    action_parts.append(
+                        f"""
 <form method="post" class="row">
   <input type="hidden" name="action" value="enable_skill_from_library">
   <input type="hidden" name="skill_name" value="{escape(name)}">
   <button class="btn" type="submit">{t("Enable", "启用")}</button>
 </form>
 """
-                    if exists
-                    else f"""
-<form method="post" class="row">
-  <input type="hidden" name="action" value="install_skill_library">
-  <input type="hidden" name="library_skill_id" value="{escape(str(item['id']))}">
-  <button class="btn primary" type="submit">{t("Install", "安装")}</button>
-</form>
-"""
-                )
+                    )
+                action_html = "".join(action_parts) or f"<span class='muted'>{t('No action', '无操作')}</span>"
+                hint = health["hint"]
+                if not global_installed:
+                    suffix = t("global copy missing", "全局目录未安装")
+                    hint = f"{hint}; {suffix}" if hint else suffix
                 lib_rows.append(
                     f"""
 <tr>
   <td><code>{escape(name)}</code></td>
   <td class="small">{escape(str(item['desc']))}</td>
-  <td><span class="pill {health_class}">{escape(str(health_label))}</span><div class="muted small">{escape(health['hint'])}</div></td>
+  <td><span class="pill {health_class}">{escape(str(health_label))}</span><div class="muted small">{escape(hint)}</div></td>
   <td>{action_html}</td>
 </tr>
 """
