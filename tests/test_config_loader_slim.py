@@ -1,6 +1,6 @@
 import json
 
-from nanobot.config.loader import save_config
+from nanobot.config.loader import inspect_config_hints, save_config
 from nanobot.config.schema import Config, EndpointProviderConfig
 
 
@@ -48,3 +48,39 @@ def test_save_config_slims_duplicates_and_legacy_web_search_fields(tmp_path):
             "extraHeaders": None,
         }
     }
+
+
+def test_inspect_config_hints_reports_legacy_and_duplicates(tmp_path):
+    raw = {
+        "channels": {"sendToolHints": True},
+        "tools": {
+            "enabled": ["web_search", "web_search"],
+            "aliases": {"foo": "foo"},
+            "exec": {"restrictToWorkspace": True},
+            "web": {"search": {"provider": "brave"}},
+        },
+        "providers": {
+            "endpoints": {
+                "ohmygpt": {"models": ["ohmygpt/gemini-2.5-flash-lite"]},
+            }
+        },
+    }
+    path = tmp_path / "config.json"
+    path.write_text(json.dumps(raw), encoding="utf-8")
+
+    hints = inspect_config_hints(path)
+    joined = "\n".join(hints)
+    assert "tools.exec.restrictToWorkspace" in joined
+    assert "legacy web.search.provider" in joined
+    assert "contains duplicates" in joined
+    assert "self mapping" in joined
+    assert "sendToolHints=true" in joined
+    assert "model allowlist uses endpoint prefix" in joined
+
+
+def test_inspect_config_hints_handles_invalid_json(tmp_path):
+    path = tmp_path / "config.json"
+    path.write_text("{ invalid json", encoding="utf-8")
+    hints = inspect_config_hints(path)
+    assert hints
+    assert "config parse error" in hints[0]

@@ -85,6 +85,104 @@ def _migrate_config(data: dict) -> dict:
     return data
 
 
+def inspect_config_hints(config_path: Path | None = None) -> list[str]:
+    """
+    Inspect raw config file and return lightweight migration/validation hints.
+
+    This is non-blocking diagnostics used by Web UI / doctor-like screens.
+    """
+    path = config_path or get_config_path()
+    if not path.exists():
+        return []
+    try:
+        with open(path, encoding="utf-8") as f:
+            data = json.load(f)
+    except json.JSONDecodeError as e:
+        return [f"config parse error: {e}"]
+    except Exception as e:
+        return [f"config read error: {e}"]
+    return _collect_raw_config_hints(data)
+
+
+def _collect_raw_config_hints(data: dict) -> list[str]:
+    hints: list[str] = []
+    if not isinstance(data, dict):
+        return ["config root should be a JSON object"]
+
+    tools = data.get("tools") or {}
+    if isinstance(tools, dict):
+        exec_cfg = tools.get("exec") or {}
+        if (
+            isinstance(exec_cfg, dict)
+            and "restrictToWorkspace" in exec_cfg
+            and "restrictToWorkspace" not in tools
+        ):
+            hints.append(
+                "legacy key `tools.exec.restrictToWorkspace` detected; it will be migrated to `tools.restrictToWorkspace`"
+            )
+
+        web_cfg = tools.get("web") or {}
+        if isinstance(web_cfg, dict):
+            search_cfg = web_cfg.get("search") or {}
+            if isinstance(search_cfg, dict):
+                provider = str(search_cfg.get("provider") or "").strip().lower()
+                if provider in {"auto", "brave"}:
+                    hints.append("legacy web.search.provider detected (`auto/brave`); use `exa_mcp` or `disabled`")
+                elif provider and provider not in {"exa_mcp", "disabled"}:
+                    hints.append(f"unknown web.search.provider `{provider}`; expected `exa_mcp` or `disabled`")
+
+        for key in ("enabled", "mcpEnabledServers", "mcpDisabledServers", "mcpEnabledTools", "mcpDisabledTools"):
+            raw = tools.get(key)
+            if not isinstance(raw, list):
+                continue
+            seen: set[str] = set()
+            dup: list[str] = []
+            for item in raw:
+                text = str(item).strip()
+                if not text:
+                    continue
+                if text in seen and text not in dup:
+                    dup.append(text)
+                seen.add(text)
+            if dup:
+                hints.append(f"`tools.{key}` contains duplicates: {', '.join(dup)}")
+
+        aliases = tools.get("aliases")
+        if isinstance(aliases, dict):
+            for raw_key, raw_val in aliases.items():
+                k = str(raw_key).strip()
+                v = str(raw_val).strip()
+                if not k or not v:
+                    hints.append("`tools.aliases` contains blank key/value")
+                    break
+                if k == v:
+                    hints.append(f"`tools.aliases` contains self mapping: {k} -> {v}")
+
+    providers = data.get("providers") or {}
+    if isinstance(providers, dict):
+        endpoints = providers.get("endpoints") or {}
+        if isinstance(endpoints, dict):
+            for ep_name, ep_cfg in endpoints.items():
+                if not isinstance(ep_cfg, dict):
+                    continue
+                models = ep_cfg.get("models")
+                if isinstance(models, list):
+                    for item in models:
+                        text = str(item).strip()
+                        if text.startswith(f"{ep_name}/"):
+                            hints.append(
+                                f"endpoint `{ep_name}` model allowlist uses endpoint prefix (`{text}`); store plain model names"
+                            )
+                            break
+
+    channels = data.get("channels") or {}
+    if isinstance(channels, dict):
+        if channels.get("sendToolHints") is True:
+            hints.append("`channels.sendToolHints=true` may leak tool invocation traces; recommend false")
+
+    return hints
+
+
 def _dedupe_strings(items: list) -> list:
     seen: set[str] = set()
     out: list = []

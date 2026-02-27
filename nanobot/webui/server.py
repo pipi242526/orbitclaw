@@ -35,6 +35,19 @@ from nanobot.utils.helpers import (
     get_global_skills_path,
     get_media_dir,
 )
+from nanobot.webui.catalog import (
+    MCP_LIBRARY as _MCP_LIBRARY,
+    SKILL_LIBRARY as _SKILL_LIBRARY,
+    evaluate_mcp_library_health,
+    evaluate_skill_library_health,
+    find_mcp_library_entry,
+    install_skill_from_library,
+)
+from nanobot.webui.diagnostics import (
+    collect_channel_runtime_issues as _collect_channel_runtime_issues_impl,
+    collect_config_migration_hints,
+    collect_tool_policy_diagnostics as _collect_tool_policy_diagnostics_impl,
+)
 
 
 _ENDPOINT_TYPES = [
@@ -66,118 +79,8 @@ _REPLY_LANGUAGE_OPTIONS = [
     ("es", "es (Español)"),
 ]
 
-_BUILTIN_TOOL_NAMES = [
-    "read_file",
-    "write_file",
-    "edit_file",
-    "list_dir",
-    "exec",
-    "web_search",
-    "web_fetch",
-    "files_hub",
-    "export_file",
-    "weather",
-    "claude_code",
-    "message",
-    "spawn",
-    "cron",
-]
-
 _MAX_SKILL_IMPORT_BYTES = 512 * 1024
 _MAX_REMOTE_JSON_BYTES = 1024 * 1024
-
-_MCP_LIBRARY = [
-    {
-        "id": "exa",
-        "name": "Exa Search",
-        "desc": "Web search + code context (needs your own EXA_API_KEY).",
-        "server_name": "exa",
-        "config": MCPServerConfig(
-            url="https://mcp.exa.ai/mcp?tools=web_search_exa,get_code_context_exa&exaApiKey=${EXA_API_KEY}"
-        ),
-    },
-    {
-        "id": "docloader",
-        "name": "Document Loader",
-        "desc": "Parse PDF/Word/PPT/Excel/images via FastMCP server.",
-        "server_name": "docloader",
-        "config": MCPServerConfig(
-            command="uvx",
-            args=["awslabs.document-loader-mcp-server@latest"],
-            env={"FASTMCP_LOG_LEVEL": "ERROR"},
-        ),
-    },
-    {
-        "id": "fetch",
-        "name": "Fetch",
-        "desc": "HTTP fetch/extract helper MCP (suitable for docs/web text).",
-        "server_name": "fetch",
-        "config": MCPServerConfig(
-            command="uvx",
-            args=["mcp-server-fetch@latest"],
-        ),
-    },
-    {
-        "id": "github",
-        "name": "GitHub MCP",
-        "desc": "GitHub API MCP (requires GITHUB_TOKEN).",
-        "server_name": "github_mcp",
-        "config": MCPServerConfig(
-            command="npx",
-            args=["-y", "@modelcontextprotocol/server-github"],
-            env={"GITHUB_PERSONAL_ACCESS_TOKEN": "${GITHUB_TOKEN}"},
-        ),
-    },
-    {
-        "id": "filesystem",
-        "name": "Filesystem MCP",
-        "desc": "Expose local directory as MCP filesystem tools.",
-        "server_name": "filesystem",
-        "config": MCPServerConfig(
-            command="npx",
-            args=["-y", "@modelcontextprotocol/server-filesystem", "."],
-        ),
-    },
-    {
-        "id": "sqlite",
-        "name": "SQLite MCP",
-        "desc": "SQLite query MCP (local DB inspection).",
-        "server_name": "sqlite",
-        "config": MCPServerConfig(
-            command="npx",
-            args=["-y", "@modelcontextprotocol/server-sqlite", "--db-path", "./data.db"],
-        ),
-    },
-    {
-        "id": "memory",
-        "name": "Memory MCP",
-        "desc": "Simple key-value memory MCP server.",
-        "server_name": "memory_mcp",
-        "config": MCPServerConfig(
-            command="npx",
-            args=["-y", "@modelcontextprotocol/server-memory"],
-        ),
-    },
-    {
-        "id": "sequential",
-        "name": "Sequential Thinking MCP",
-        "desc": "Step-by-step reasoning helper MCP.",
-        "server_name": "sequential_thinking",
-        "config": MCPServerConfig(
-            command="npx",
-            args=["-y", "@modelcontextprotocol/server-sequential-thinking"],
-        ),
-    },
-]
-
-_SKILL_LIBRARY = [
-    {"id": "memory", "name": "memory", "desc": "Persistent memory best-practice."},
-    {"id": "github", "name": "github", "desc": "GitHub workflow via gh CLI."},
-    {"id": "weather", "name": "weather", "desc": "Daily weather queries."},
-    {"id": "attachment-analyzer", "name": "attachment-analyzer", "desc": "Document/image analysis flow."},
-    {"id": "tmux", "name": "tmux", "desc": "Terminal session management."},
-    {"id": "summarize", "name": "summarize", "desc": "Long-content summarization."},
-]
 
 _CHANNEL_QUICK_SPECS: list[dict[str, Any]] = [
     {
@@ -454,69 +357,11 @@ def _derive_env_prefix_from_placeholders(values: list[str], default_prefix: str)
 
 
 def _collect_channel_runtime_issues(raw_cfg: Config, resolved_cfg: Config) -> list[str]:
-    issues: list[str] = []
-    for spec in _CHANNEL_QUICK_SPECS:
-        sid = str(spec["id"])
-        raw_channel = getattr(raw_cfg.channels, sid)
-        resolved_channel = getattr(resolved_cfg.channels, sid)
-        if not bool(getattr(raw_channel, "enabled", False)):
-            continue
-        for field in spec["fields"]:
-            if not bool(field.get("required")):
-                continue
-            path = str(field["path"])
-            raw_value = str(_get_nested_attr(raw_channel, path) or "").strip()
-            resolved_value = str(_get_nested_attr(resolved_channel, path) or "").strip()
-            if resolved_value:
-                continue
-            if _is_env_placeholder(raw_value):
-                m = _ENV_PLACEHOLDER_RE.match(raw_value)
-                env_key = m.group(1) if m else raw_value
-                issues.append(f"{sid}: missing env `{env_key}`")
-            else:
-                issues.append(f"{sid}: missing `{path}`")
-    return issues
+    return _collect_channel_runtime_issues_impl(raw_cfg, resolved_cfg)
 
 
 def _collect_tool_policy_diagnostics(cfg: Config) -> list[str]:
-    warnings: list[str] = []
-    enabled_builtin = {t.strip() for t in (cfg.tools.enabled or []) if t.strip()}
-    if cfg.tools.enabled:
-        unknown = sorted([t for t in enabled_builtin if t not in _BUILTIN_TOOL_NAMES])
-        if unknown:
-            warnings.append(f"tools.enabled 包含未知内置工具: {', '.join(unknown)}")
-    if cfg.tools.enabled and "message" not in enabled_builtin:
-        warnings.append("tools.enabled 未包含 `message`，部分渠道回传可能异常。")
-    if cfg.tools.enabled and "spawn" not in enabled_builtin:
-        warnings.append("tools.enabled 未包含 `spawn`，后台子代理能力不可用。")
-
-    aliases = cfg.tools.aliases or {}
-    for k, v in aliases.items():
-        if not str(k).strip() or not str(v).strip():
-            warnings.append(f"alias 无效: {k!r} -> {v!r}")
-        elif str(k).strip() == str(v).strip():
-            warnings.append(f"alias 无效（自映射）: {k} -> {v}")
-
-    enabled_servers = {x.strip() for x in (cfg.tools.mcp_enabled_servers or []) if x.strip()}
-    disabled_servers = {x.strip() for x in (cfg.tools.mcp_disabled_servers or []) if x.strip()}
-    overlap_servers = sorted(enabled_servers & disabled_servers)
-    if overlap_servers:
-        warnings.append(f"MCP 服务同时在 enabled/disabled: {', '.join(overlap_servers)}")
-
-    enabled_tools = {x.strip() for x in (cfg.tools.mcp_enabled_tools or []) if x.strip()}
-    disabled_tools = {x.strip() for x in (cfg.tools.mcp_disabled_tools or []) if x.strip()}
-    overlap_tools = sorted(enabled_tools & disabled_tools)
-    if overlap_tools:
-        warnings.append(f"MCP 工具同时在 enabled/disabled: {', '.join(overlap_tools)}")
-
-    provider_mode = (cfg.tools.web.search.provider or "exa_mcp").strip().lower()
-    if provider_mode == "exa_mcp":
-        if "exa" not in (cfg.tools.mcp_servers or {}):
-            warnings.append("web_search 使用 exa_mcp，但未配置 exa MCP server。")
-        if cfg.tools.enabled and "web_search" not in enabled_builtin:
-            warnings.append("web_search provider 已启用，但 web_search 不在 tools.enabled。")
-
-    return warnings
+    return _collect_tool_policy_diagnostics_impl(cfg)
 
 
 def _normalize_ui_lang(value: str | None) -> str:
@@ -1169,9 +1014,12 @@ def run_webui(
                 cfg.agents.defaults.model,
             )
             channel_issues = _collect_channel_runtime_issues(cfg, cfg_resolved)
+            config_hints = collect_config_migration_hints(cfg_path)
             issues = [*channel_issues]
             if not default_model_ok:
                 issues.append(f"default model: {default_model_reason}")
+            for hint in config_hints:
+                issues.append(f"config: {hint}")
             for ep_name, ep_cfg in cfg.providers.endpoints.items():
                 for model_ref in ep_cfg.models or []:
                     text = str(model_ref).strip()
@@ -1210,6 +1058,10 @@ def run_webui(
                 elif "exa_mcp" in item:
                     action_rows.append(
                         f"<li>{escape(item)} · <a class='mono' href='/mcp'>{t('fix in MCP page', '去 MCP 页面修复')}</a></li>"
+                    )
+                elif item.startswith("config:"):
+                    action_rows.append(
+                        f"<li>{escape(item)} · <a class='mono' href='/'>{t('review config migration hints and resave related page', '查看配置迁移提示后到对应页面重存')}</a></li>"
                     )
                 else:
                     action_rows.append(
@@ -1281,6 +1133,7 @@ def run_webui(
       <tr><th>{t("Media files", "媒体文件数")}</th><td>{media_count}</td></tr>
       <tr><th>{t("Export files", "导出文件数")}</th><td>{export_count}</td></tr>
       <tr><th>{t("Default model check", "默认模型检查")}</th><td>{'OK' if default_model_ok else 'FAIL'} ({escape(default_model_reason)})</td></tr>
+      <tr><th>{t("Config migration hints", "配置迁移提示")}</th><td>{len(config_hints)}</td></tr>
       <tr><th>{t("Unavailable skills", "不可用技能")}</th><td>{len(unavailable_skills)}</td></tr>
       <tr><th>{t("MCP servers", "MCP 服务数")}</th><td>{len(mcp_servers)} ({len(cfg.tools.mcp_enabled_servers or [])} allowlisted)</td></tr>
     </table>
@@ -1678,12 +1531,23 @@ def run_webui(
             lib_rows = []
             for item in _MCP_LIBRARY:
                 sid = item["id"]
+                health = evaluate_mcp_library_health(cfg, item)
+                health_label_map = {
+                    "ready": t("ready", "就绪"),
+                    "missing_env": t("missing env", "缺少环境变量"),
+                    "missing_command": t("missing cmd", "缺少命令"),
+                    "filtered": t("filtered", "已过滤"),
+                    "not_installed": t("not installed", "未安装"),
+                }
+                health_label = health_label_map.get(health["status"], health["label"])
+                health_class = "ok" if health["status"] == "ready" else "off"
                 lib_rows.append(
                     f"""
 <tr>
   <td><code>{escape(str(item['name']))}</code></td>
   <td class="small">{escape(str(item['desc']))}</td>
   <td><code>{escape(str(item['server_name']))}</code></td>
+  <td><span class="pill {health_class}">{escape(str(health_label))}</span><div class="muted small">{escape(health['hint'])}</div></td>
   <td>
     <form method="post" class="row">
       <input type="hidden" name="action" value="install_mcp_library">
@@ -1720,7 +1584,7 @@ def run_webui(
 <section class="card" style="margin-top:14px">
   <h2>{t("MCP Library", "MCP 库")}</h2>
   <table>
-    <tr><th>{t("Name", "名称")}</th><th>{t("Description", "说明")}</th><th>{t("Server Key", "服务键")}</th><th>{t("Action", "操作")}</th></tr>
+    <tr><th>{t("Name", "名称")}</th><th>{t("Description", "说明")}</th><th>{t("Server Key", "服务键")}</th><th>{t("Health", "健康检查")}</th><th>{t("Action", "操作")}</th></tr>
     {''.join(lib_rows)}
   </table>
 </section>
@@ -1802,28 +1666,42 @@ def run_webui(
 """
                 )
             lib_rows = []
-            disabled_set = set(cfg.skills.disabled or [])
             for item in _SKILL_LIBRARY:
                 name = str(item["name"])
                 exists = name in known_skills
-                status = (
-                    t("enabled", "已启用")
-                    if (exists and name not in disabled_set)
-                    else (t("disabled", "已禁用") if exists else t("not installed", "未安装"))
+                health = evaluate_skill_library_health(cfg, item, skill_rows)
+                health_label_map = {
+                    "ready": t("ready", "就绪"),
+                    "disabled": t("disabled", "已禁用"),
+                    "missing_deps": t("missing deps", "缺少依赖"),
+                    "not_installed": t("not installed", "未安装"),
+                }
+                health_label = health_label_map.get(health["status"], health["label"])
+                health_class = "ok" if health["status"] == "ready" else "off"
+                action_html = (
+                    f"""
+<form method="post" class="row">
+  <input type="hidden" name="action" value="enable_skill_from_library">
+  <input type="hidden" name="skill_name" value="{escape(name)}">
+  <button class="btn" type="submit">{t("Enable", "启用")}</button>
+</form>
+"""
+                    if exists
+                    else f"""
+<form method="post" class="row">
+  <input type="hidden" name="action" value="install_skill_library">
+  <input type="hidden" name="library_skill_id" value="{escape(str(item['id']))}">
+  <button class="btn primary" type="submit">{t("Install", "安装")}</button>
+</form>
+"""
                 )
                 lib_rows.append(
                     f"""
 <tr>
   <td><code>{escape(name)}</code></td>
   <td class="small">{escape(str(item['desc']))}</td>
-  <td>{escape(status)}</td>
-  <td>
-    <form method="post" class="row">
-      <input type="hidden" name="action" value="enable_skill_from_library">
-      <input type="hidden" name="skill_name" value="{escape(name)}">
-      <button class="btn" type="submit">{t("Enable", "启用")}</button>
-    </form>
-  </td>
+  <td><span class="pill {health_class}">{escape(str(health_label))}</span><div class="muted small">{escape(health['hint'])}</div></td>
+  <td>{action_html}</td>
 </tr>
 """
                 )
@@ -1853,7 +1731,7 @@ def run_webui(
 <section class="card" style="margin-top:14px">
   <h2>{t("Skill Library", "技能库")}</h2>
   <table>
-    <tr><th>{t("Name", "名称")}</th><th>{t("Description", "说明")}</th><th>{t("Status", "状态")}</th><th>{t("Action", "操作")}</th></tr>
+    <tr><th>{t("Name", "名称")}</th><th>{t("Description", "说明")}</th><th>{t("Health", "健康检查")}</th><th>{t("Action", "操作")}</th></tr>
     {''.join(lib_rows)}
   </table>
 </section>
@@ -2181,7 +2059,7 @@ def run_webui(
             if action == "install_mcp_library":
                 library_id = self._form_str(form, "library_id").strip()
                 overwrite = self._form_bool(form, "overwrite_existing")
-                item = next((x for x in _MCP_LIBRARY if x["id"] == library_id), None)
+                item = find_mcp_library_entry(library_id)
                 if not item:
                     raise ValueError(f"Unknown MCP library entry: {library_id}")
                 name = str(item["server_name"])
@@ -2268,6 +2146,19 @@ def run_webui(
         def _handle_post_skills(self, form: dict[str, list[str]]) -> None:
             cfg = self._load_config()
             action = self._form_str(form, "action")
+
+            if action == "install_skill_library":
+                entry_id = self._form_str(form, "library_skill_id").strip()
+                item = find_skill_library_entry(entry_id)
+                if not item:
+                    raise ValueError(f"Unknown skill library entry: {entry_id}")
+                ok, reason = install_skill_from_library(str(item["name"]), overwrite=self._form_bool(form, "overwrite_existing"))
+                if not ok:
+                    raise ValueError(reason)
+                cfg.skills.disabled = [s for s in (cfg.skills.disabled or []) if s != str(item["name"])]
+                self._save_config(cfg)
+                self._redirect("/skills", msg=reason)
+                return
 
             if action == "enable_skill_from_library":
                 name = self._form_str(form, "skill_name").strip()
