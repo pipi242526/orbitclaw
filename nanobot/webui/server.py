@@ -7,6 +7,8 @@ import os
 import re
 import secrets
 import threading
+import urllib.error
+import urllib.request
 import webbrowser
 from html import escape
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -99,6 +101,16 @@ _MCP_LIBRARY = [
             env={"FASTMCP_LOG_LEVEL": "ERROR"},
         ),
     },
+    {
+        "id": "fetch",
+        "name": "Fetch",
+        "desc": "HTTP fetch/extract helper MCP (suitable for docs/web text).",
+        "server_name": "fetch",
+        "config": MCPServerConfig(
+            command="uvx",
+            args=["mcp-server-fetch@latest"],
+        ),
+    },
 ]
 
 _SKILL_BUNDLES = {
@@ -118,6 +130,15 @@ _SKILL_BUNDLES = {
         "disable": {"github", "tmux", "summarize", "clawhub", "weather", "skill-creator"},
     },
 }
+
+_SKILL_LIBRARY = [
+    {"id": "memory", "name": "memory", "desc": "Persistent memory best-practice."},
+    {"id": "github", "name": "github", "desc": "GitHub workflow via gh CLI."},
+    {"id": "weather", "name": "weather", "desc": "Daily weather queries."},
+    {"id": "attachment-analyzer", "name": "attachment-analyzer", "desc": "Document/image analysis flow."},
+    {"id": "tmux", "name": "tmux", "desc": "Terminal session management."},
+    {"id": "summarize", "name": "summarize", "desc": "Long-content summarization."},
+]
 
 
 def _merge_unique(items: list[str], additions: list[str]) -> list[str]:
@@ -306,7 +327,6 @@ _UI_TEXTS = {
         "tab_mcp": "MCP",
         "tab_skills": "Skills",
         "tab_media": "Media",
-        "tab_tools": "Tools Policy",
         "ui_lang": "Language",
         "not_found": "Not Found",
         "error": "Error",
@@ -318,7 +338,6 @@ _UI_TEXTS = {
         "tab_mcp": "MCP",
         "tab_skills": "技能",
         "tab_media": "媒体文件",
-        "tab_tools": "工具策略",
         "ui_lang": "语言",
         "not_found": "未找到页面",
         "error": "错误",
@@ -461,7 +480,7 @@ def run_webui(
             if route_path is None:
                 self._send_text(404, "Not Found", head_only=True)
                 return
-            if route_path in {"/", "/endpoints", "/channels", "/mcp", "/skills", "/tools", "/extensions", "/media"}:
+            if route_path in {"/", "/endpoints", "/channels", "/mcp", "/skills", "/extensions", "/media"}:
                 self._send_text(200, "", head_only=True)
                 return
             self._send_text(404, "Not Found", head_only=True)
@@ -493,8 +512,6 @@ def run_webui(
                     self._render_mcp(msg=msg, err=err)
                 elif route_path == "/skills":
                     self._render_skills(msg=msg, err=err)
-                elif route_path == "/tools":
-                    self._render_tools(msg=msg, err=err)
                 elif route_path == "/media":
                     self._render_media(msg=msg, err=err)
                 else:
@@ -523,9 +540,6 @@ def run_webui(
                 if route_path == "/skills":
                     self._handle_post_skills(form)
                     return
-                if route_path == "/tools":
-                    self._handle_post_tools(form)
-                    return
                 if route_path == "/extensions":
                     self._handle_post_mcp(form)
                     return
@@ -534,7 +548,7 @@ def run_webui(
                     return
                 self._redirect("/", err="Unsupported action")
             except Exception as e:
-                target = route_path if route_path in {"/endpoints", "/channels", "/mcp", "/skills", "/tools", "/extensions", "/media"} else "/"
+                target = route_path if route_path in {"/endpoints", "/channels", "/mcp", "/skills", "/extensions", "/media"} else "/"
                 self._redirect(target, err=str(e))
 
         def _load_config(self) -> Config:
@@ -623,7 +637,6 @@ def run_webui(
                 ("/channels", _ui_text(self._ui_lang, "tab_channels")),
                 ("/mcp", _ui_text(self._ui_lang, "tab_mcp")),
                 ("/skills", _ui_text(self._ui_lang, "tab_skills")),
-                ("/tools", _ui_text(self._ui_lang, "tab_tools")),
                 ("/media", _ui_text(self._ui_lang, "tab_media")),
             ]
             links = []
@@ -646,13 +659,6 @@ def run_webui(
                 if self._ui_lang == "en"
                 else f"轻量配置管理台（Host: {escape(host)}:{port}） · 使用路径密钥访问"
             )
-            token_note = (
-                "Path token is enabled (not shown on page)"
-                if self._ui_lang == "en"
-                else "路径密钥已启用（页面不展示密钥）"
-            )
-            copy_entry = "Copy Entry URL" if self._ui_lang == "en" else "复制入口地址"
-            copy_current = "Copy Current URL" if self._ui_lang == "en" else "复制当前页面地址"
             return f"""<!doctype html>
 <html lang="{escape(self._ui_lang)}">
 <head>
@@ -768,11 +774,6 @@ def run_webui(
       <div class="brand">
         <h1>nanobot Web UI</h1>
         <p>{subtitle}</p>
-        <div class="access-chip">
-          <span>{token_note}</span>
-          <button type="button" class="btn" data-copy="{escape(full_access_url)}" onclick="nbCopy(this.dataset.copy)">{copy_entry}</button>
-          <button type="button" class="btn subtle" onclick="nbCopy(window.location.href)">{copy_current}</button>
-        </div>
       </div>
       <div style="display:grid; gap:8px;">
         <div class="row" style="justify-content:flex-end">
@@ -1075,6 +1076,7 @@ def run_webui(
       <li>sendProgress: {'on' if cfg.channels.send_progress else 'off'}</li>
       <li>sendToolHints: {'on' if cfg.channels.send_tool_hints else 'off'}（建议关闭）</li>
       <li>主用 TG 时建议：保持 <code>sendToolHints=false</code></li>
+      <li><code>allowFrom</code> 里的用户 ID / 群组 ID 通常不是敏感信息，可以直接写明文（不必强制放 env）。</li>
     </ul>
     <div class="muted">修改渠道 token/secret 后通常需要重启 gateway 才会生效。</div>
   </section>
@@ -1299,6 +1301,27 @@ def run_webui(
   </table>
 </section>
 <section class="card" style="margin-top:14px">
+  <h2>Add Custom MCP Server</h2>
+  <form method="post">
+    <input type="hidden" name="action" value="save_custom_mcp">
+    <div class="endpoint-fields">
+      <div class="field"><label>Server key</label><input type="text" name="server_name" placeholder="myserver"></div>
+      <div class="field"><label>Mode</label>
+        <select name="mode">
+          <option value="url">HTTP URL</option>
+          <option value="stdio">Stdio command</option>
+        </select>
+      </div>
+      <div class="field full"><label>URL (for HTTP mode)</label><input type="text" name="url" placeholder="https://example.com/mcp"></div>
+      <div class="field"><label>Command (for stdio mode)</label><input type="text" name="command" placeholder="uvx"></div>
+      <div class="field"><label>Args (CSV, stdio mode)</label><input type="text" name="args_csv" placeholder="package@latest, --flag"></div>
+      <div class="field full"><label>Env JSON (optional)</label><textarea name="env_json" style="min-height:120px">{{}}</textarea></div>
+      <div class="field"><label><input type="checkbox" name="enable_now" checked> add to enabled servers</label></div>
+    </div>
+    <div class="row"><button class="btn primary" type="submit">Save MCP Server</button></div>
+  </form>
+</section>
+<section class="card" style="margin-top:14px">
   <h2>Consistency Checks</h2>
   <ul class="list small">
     {''.join(f'<li>{escape(item)}</li>' for item in diag_warnings) or '<li>No obvious conflict found.</li>'}
@@ -1310,6 +1333,7 @@ def run_webui(
         def _render_skills(self, *, msg: str = "", err: str = "") -> None:
             cfg = self._load_config()
             skill_rows = _collect_skill_rows(cfg)
+            known_skills = {str(s["name"]) for s in skill_rows}
             rows_html = []
             for s in skill_rows:
                 badge = '<span class="pill ok">available</span>' if s["available"] else '<span class="pill off">missing deps</span>'
@@ -1330,6 +1354,28 @@ def run_webui(
                 f'<option value="{escape(k)}">{escape(v["name"])} - {escape(v["desc"])}</option>'
                 for k, v in _SKILL_BUNDLES.items()
             )
+            lib_rows = []
+            disabled_set = set(cfg.skills.disabled or [])
+            for item in _SKILL_LIBRARY:
+                name = str(item["name"])
+                exists = name in known_skills
+                status = "enabled" if (exists and name not in disabled_set) else ("disabled" if exists else "not installed")
+                lib_rows.append(
+                    f"""
+<tr>
+  <td><code>{escape(name)}</code></td>
+  <td class="small">{escape(str(item['desc']))}</td>
+  <td>{escape(status)}</td>
+  <td>
+    <form method="post" class="row">
+      <input type="hidden" name="action" value="enable_skill_from_library">
+      <input type="hidden" name="skill_name" value="{escape(name)}">
+      <button class="btn" type="submit">Enable</button>
+    </form>
+  </td>
+</tr>
+"""
+                )
             skills_json = _pretty_json(cfg.skills.model_dump(by_alias=True))
             body = f"""
 <div class="grid cols-2">
@@ -1354,6 +1400,22 @@ def run_webui(
     <div class="muted">Bundle updates <code>skills.disabled</code> for quick onboarding.</div>
   </section>
 </div>
+<section class="card" style="margin-top:14px">
+  <h2>Skill Library</h2>
+  <table>
+    <tr><th>Name</th><th>Description</th><th>Status</th><th>Action</th></tr>
+    {''.join(lib_rows)}
+  </table>
+</section>
+<section class="card" style="margin-top:14px">
+  <h2>Import Skill From URL</h2>
+  <form method="post" class="endpoint-fields">
+    <input type="hidden" name="action" value="import_skill_from_url">
+    <div class="field"><label>Skill name</label><input type="text" name="skill_name" placeholder="my-skill"></div>
+    <div class="field"><label>SKILL.md URL</label><input type="text" name="skill_url" placeholder="https://raw.githubusercontent.com/.../SKILL.md"></div>
+    <div class="field full"><button class="btn warn" type="submit">Import</button></div>
+  </form>
+</section>
 <form method="post" class="card" style="margin-top:14px">
   <h2>Skills JSON (Advanced)</h2>
   <input type="hidden" name="action" value="save_skills_json">
@@ -1655,6 +1717,35 @@ def run_webui(
                 self._redirect("/mcp", msg=f"Installed MCP library entry: {name}")
                 return
 
+            if action == "save_custom_mcp":
+                server_name = self._form_str(form, "server_name").strip()
+                mode = self._form_str(form, "mode", "url").strip().lower()
+                if not server_name:
+                    raise ValueError("server_name is required")
+                if mode == "url":
+                    url = self._form_str(form, "url").strip()
+                    if not url:
+                        raise ValueError("url is required for HTTP mode")
+                    cfg.tools.mcp_servers[server_name] = MCPServerConfig(url=url)
+                elif mode == "stdio":
+                    cmd = self._form_str(form, "command").strip()
+                    if not cmd:
+                        raise ValueError("command is required for stdio mode")
+                    args = _parse_csv(self._form_str(form, "args_csv", ""))
+                    env = _safe_json_object(self._form_str(form, "env_json", "{}"), "env_json")
+                    cfg.tools.mcp_servers[server_name] = MCPServerConfig(
+                        command=cmd,
+                        args=args,
+                        env={str(k): str(v) for k, v in env.items()},
+                    )
+                else:
+                    raise ValueError("mode must be url or stdio")
+                if self._form_bool(form, "enable_now"):
+                    cfg.tools.mcp_enabled_servers = _merge_unique(cfg.tools.mcp_enabled_servers, [server_name])
+                self._save_config(cfg)
+                self._redirect("/mcp", msg=f"Saved MCP server: {server_name}")
+                return
+
             if action == "save_tools_json":
                 data = _safe_json_object(self._form_str(form, "tools_json"), "tools")
                 cfg.tools = ToolsConfig.model_validate(data)
@@ -1667,6 +1758,39 @@ def run_webui(
         def _handle_post_skills(self, form: dict[str, list[str]]) -> None:
             cfg = self._load_config()
             action = self._form_str(form, "action")
+
+            if action == "enable_skill_from_library":
+                name = self._form_str(form, "skill_name").strip()
+                if not name:
+                    raise ValueError("skill_name is required")
+                disabled = [s for s in (cfg.skills.disabled or []) if s != name]
+                cfg.skills.disabled = disabled
+                self._save_config(cfg)
+                self._redirect("/skills", msg=f"Skill enabled: {name}")
+                return
+
+            if action == "import_skill_from_url":
+                skill_name = self._form_str(form, "skill_name").strip()
+                skill_url = self._form_str(form, "skill_url").strip()
+                if not skill_name:
+                    raise ValueError("skill_name is required")
+                if not skill_url.startswith("https://"):
+                    raise ValueError("skill_url must start with https://")
+                try:
+                    with urllib.request.urlopen(skill_url, timeout=20) as resp:
+                        content = resp.read().decode("utf-8", errors="replace")
+                except urllib.error.URLError as e:
+                    raise ValueError(f"failed to fetch skill URL: {e}") from e
+                if "# " not in content and "SKILL" not in content.upper():
+                    raise ValueError("fetched content does not look like SKILL.md")
+                skill_dir = get_global_skills_path() / skill_name
+                skill_dir.mkdir(parents=True, exist_ok=True)
+                (skill_dir / "SKILL.md").write_text(content, encoding="utf-8")
+                disabled = [s for s in (cfg.skills.disabled or []) if s != skill_name]
+                cfg.skills.disabled = disabled
+                self._save_config(cfg)
+                self._redirect("/skills", msg=f"Imported skill: {skill_name}")
+                return
 
             if action == "save_skills_enabled":
                 enabled_skills = {s.strip() for s in form.get("enabled_skill", []) if s.strip()}

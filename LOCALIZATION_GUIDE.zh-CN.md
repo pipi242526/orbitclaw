@@ -196,7 +196,7 @@ WebUI 已按职责拆分为独立页面：
 
 - `MCP`：MCP 服务器状态、模板库安装、隐私说明
 - `Skills`：技能启用/禁用、技能包一键应用
-- `Tools Policy`：工具白名单、alias、MCP 过滤可视化编辑
+- （已简化）工具细粒度策略建议直接改 `config.json`，不再作为新手主入口
 
 同时新增：
 
@@ -205,6 +205,7 @@ WebUI 已按职责拆分为独立页面：
 - 新手模板：
   - MCP 模板库：Exa / Docloader 一键安装
   - 技能包：Starter / Developer / Minimal
+  - 技能导入：支持从 `https://.../SKILL.md` URL 直接导入到全局技能目录
 
 ### 4.2 离线/受限环境（尽量不报错）
 
