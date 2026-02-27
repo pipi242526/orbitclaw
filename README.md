@@ -895,6 +895,25 @@ Profiles can provide reusable tool/skill baselines (e.g. `cn_dev`, `research`, `
 }
 ```
 
+For generated outputs, use a dedicated exports directory:
+
+- default: `~/.nanobot/exports`
+- configurable: `tools.filesHub.exportsDir`
+
+Example:
+
+```json
+{
+  "tools": {
+    "filesHub": {
+      "exportsDir": "/data/nanobot-exports"
+    }
+  }
+}
+```
+
+Use built-in `export_file` to write output artifacts (`txt`, `md`, `json`, optional `docx`) and `files_hub(scope="exports")` to inspect/clean them.
+
 For file/image attachment workflows, a lightweight pattern is:
 - keep built-in `web_fetch` (enhanced readability + HTML fallback + binary-content hints) for most web pages
 - add a document/image MCP server (PDF/DOCX/XLSX/PPTX/images)

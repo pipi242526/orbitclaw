@@ -196,6 +196,26 @@
 }
 ```
 
+### 4.4 导出目录与统一导出工具（轻量）
+
+默认导出目录是 `~/.nanobot/exports`，可通过配置改到你自己的路径：
+
+```json
+{
+  "tools": {
+    "filesHub": {
+      "exportsDir": "/data/nanobot-exports"
+    }
+  }
+}
+```
+
+建议：
+
+- 用 `export_file` 统一导出结果文件（`txt/md/json/docx`）
+- 用 `files_hub(scope=\"exports\")` 做列表与清理
+- 输入（`media`）和输出（`exports`）分离，避免误删原件
+
 ### 4.3 聊天内控制服务器 Claude Code（tmux 模式，可选）
 
 > 适合你这种“在 TG/聊天里发指令，让服务器上的 Claude Code 持续执行”的场景。
