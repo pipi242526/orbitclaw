@@ -1208,6 +1208,11 @@ def cron_run(
 def status():
     """Show nanobot status."""
     from nanobot.config.loader import load_config, get_config_path, _discover_env_files
+    from nanobot.utils.budget import (
+        collect_runtime_budget_alerts,
+        estimate_tokens_from_chars,
+        read_host_resource_snapshot,
+    )
     from nanobot.utils.helpers import (
         get_mcp_home,
         get_global_skills_path,
@@ -1285,6 +1290,14 @@ def status():
             f"background={config.agents.defaults.max_background_context_chars} chars, "
             f"inlineImage<={config.agents.defaults.max_inline_image_bytes} bytes"
         )
+        total_chars_budget = (
+            int(config.agents.defaults.max_history_chars)
+            + int(config.agents.defaults.max_memory_context_chars)
+            + int(config.agents.defaults.max_background_context_chars)
+        )
+        console.print(
+            f"Context budget tokens (coarse): ~{estimate_tokens_from_chars(total_chars_budget)}"
+        )
         console.print(
             "Runtime cleanup: "
             f"sessionCache={config.agents.defaults.session_cache_max_entries}, "
@@ -1292,6 +1305,30 @@ def status():
             f"promptCacheTTL={config.agents.defaults.system_prompt_cache_ttl_seconds}s, "
             f"bgCompaction={'on' if config.agents.defaults.auto_compact_background else 'off'}"
         )
+        snapshot = read_host_resource_snapshot()
+        load1 = snapshot.get("load1")
+        mem_used = snapshot.get("mem_used_percent")
+        disk_used = snapshot.get("disk_used_percent")
+        console.print(
+            "Host snapshot: "
+            f"load1={f'{load1:.2f}' if isinstance(load1, float) else 'n/a'}, "
+            f"mem={f'{mem_used:.1f}%' if isinstance(mem_used, float) else 'n/a'}, "
+            f"disk={f'{disk_used:.1f}%' if isinstance(disk_used, float) else 'n/a'}"
+        )
+        budget_alerts = collect_runtime_budget_alerts(config, snapshot)
+        if budget_alerts:
+            console.print(f"Budget alerts: [yellow]{len(budget_alerts)}[/yellow]")
+            for alert in budget_alerts[:5]:
+                level = str(alert.get("severity") or "warn").upper()
+                msg = str(alert.get("message") or "").strip()
+                hint = str(alert.get("suggestion") or "").strip()
+                if not msg:
+                    continue
+                console.print(f"  - [{level}] {msg}")
+                if hint:
+                    console.print(f"    [dim]Fix: {hint}[/dim]")
+        else:
+            console.print("Budget alerts: [green]none[/green]")
         effective_exports_dir = get_exports_dir(config.tools.files_hub.exports_dir)
         configured_exports = (config.tools.files_hub.exports_dir or "").strip()
         console.print(
@@ -1460,6 +1497,7 @@ def status():
 def doctor():
     """Diagnose configuration/tooling issues and suggest fixes."""
     from nanobot.config.loader import load_config, get_config_path, _discover_env_files
+    from nanobot.utils.budget import collect_runtime_budget_alerts, read_host_resource_snapshot
     from nanobot.utils.helpers import (
         get_mcp_home,
         get_global_skills_path,
@@ -1499,6 +1537,16 @@ def doctor():
         f"gcEveryTurns={config.agents.defaults.gc_every_turns}, "
         f"promptCacheTTL={config.agents.defaults.system_prompt_cache_ttl_seconds}s, "
         f"bgCompaction={'on' if config.agents.defaults.auto_compact_background else 'off'}"
+    )
+    snapshot = read_host_resource_snapshot()
+    load1 = snapshot.get("load1")
+    mem_used = snapshot.get("mem_used_percent")
+    disk_used = snapshot.get("disk_used_percent")
+    console.print(
+        "- Host snapshot: "
+        f"load1={f'{load1:.2f}' if isinstance(load1, float) else 'n/a'}, "
+        f"mem={f'{mem_used:.1f}%' if isinstance(mem_used, float) else 'n/a'}, "
+        f"disk={f'{disk_used:.1f}%' if isinstance(disk_used, float) else 'n/a'}"
     )
     env_files = _discover_env_files()
     console.print(f"- Env helper files: {len(env_files)}")
@@ -1656,6 +1704,14 @@ def doctor():
                 "providers.custom.apiBase still contains an unresolved ${ENV_VAR} placeholder",
                 "Check your helper env files and variable names for MY_API_BASE-like values.",
             ))
+
+    for alert in collect_runtime_budget_alerts(config, snapshot):
+        severity = str(alert.get("severity") or "warn").lower()
+        findings.append((
+            "error" if severity == "error" else "warn",
+            f"runtime budget: {str(alert.get('message') or '').strip()}",
+            str(alert.get("suggestion") or "Tune agent runtime budgets in Models & APIs."),
+        ))
 
     # Skills availability diagnosis (respects explicit disabled list).
     disabled_skills = set(config.skills.disabled or [])

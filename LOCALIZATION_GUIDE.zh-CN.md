@@ -465,7 +465,7 @@ nanobot webui --path-token your_random_path_token
 
 当前第一版页面（偏配置管理，不是聊天前端）：
 
-- Dashboard：配置总览、端点数量、启用渠道、轻量诊断
+- Dashboard：健康分、资源雷达、Token 预算雷达、可操作诊断建议
 - Models & APIs：管理 `providers.endpoints`（多接口、多模型、类型）
 - Channels：多渠道配置 JSON 编辑器（统一管理 TG/Discord/Feishu/...）
 - MCP & Skills：MCP 概览、推荐 Exa+docloader 一键写入、技能启用/禁用
@@ -475,6 +475,23 @@ nanobot webui --path-token your_random_path_token
 - 经常切换第三方 API 平台与模型
 - 想集中管理渠道/MCP/技能，而不是手工改 JSON
 - 仍然保持“项目不臃肿”（不引入重前端构建）
+
+## 6.6 发布前烟测（Sprint 4）
+
+除了 `./scripts/release_smoke.sh`，建议增加一轮 Docker 端到端烟测：
+
+```bash
+./tests/test_docker.sh
+```
+
+这轮会验证：
+
+- `docker compose` 启停是否正常
+- 容器内 `nanobot onboard/status/doctor`
+- WebUI 路径密钥是否已生成
+- `/{path_token}/healthz` 与仪表盘关键字段是否可访问
+
+如果这一步失败，优先先修复容器运行路径，再考虑功能层问题。
 
 ## 7. 从外部项目借鉴的设计点（适合 nanobot）
 

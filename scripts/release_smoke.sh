@@ -19,12 +19,14 @@ python3 -m py_compile \
 echo "==> release smoke: focused tests"
 if command -v uv >/dev/null 2>&1; then
   uv run --extra dev pytest -q \
+    tests/test_budget_utils.py \
     tests/test_context_language_hint.py \
     tests/test_files_hub_tool.py \
     tests/test_export_file_tool.py \
     tests/test_web_fetch_tool.py
 else
   python3 -m pytest -q \
+    tests/test_budget_utils.py \
     tests/test_context_language_hint.py \
     tests/test_files_hub_tool.py \
     tests/test_export_file_tool.py \

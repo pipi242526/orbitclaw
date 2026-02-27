@@ -6,7 +6,6 @@ import json
 import os
 import re
 import secrets
-import shutil
 import socket
 import threading
 import urllib.error
@@ -34,6 +33,11 @@ from nanobot.utils.helpers import (
     get_exports_dir,
     get_global_skills_path,
     get_media_dir,
+)
+from nanobot.utils.budget import (
+    collect_runtime_budget_alerts,
+    estimate_tokens_from_chars as _estimate_tokens_from_chars,
+    read_host_resource_snapshot as _read_host_resource_snapshot,
 )
 from nanobot.webui.catalog import (
     MCP_LIBRARY as _MCP_LIBRARY,
@@ -299,50 +303,6 @@ def _set_nested_attr(obj: Any, path: str, value: Any) -> None:
     for part in parts[:-1]:
         cur = getattr(cur, part)
     setattr(cur, parts[-1], value)
-
-
-def _read_host_resource_snapshot() -> dict[str, float | int | None]:
-    out: dict[str, float | int | None] = {
-        "load1": None,
-        "load5": None,
-        "load15": None,
-        "mem_used_percent": None,
-        "disk_used_percent": None,
-    }
-    try:
-        load1, load5, load15 = os.getloadavg()
-        out["load1"] = float(load1)
-        out["load5"] = float(load5)
-        out["load15"] = float(load15)
-    except Exception:
-        pass
-
-    try:
-        total = available = None
-        with open("/proc/meminfo", encoding="utf-8") as f:
-            for line in f:
-                if line.startswith("MemTotal:"):
-                    total = int(line.split()[1]) * 1024
-                elif line.startswith("MemAvailable:"):
-                    available = int(line.split()[1]) * 1024
-        if total and available is not None and total > 0:
-            used = max(0, total - available)
-            out["mem_used_percent"] = (used / total) * 100.0
-    except Exception:
-        pass
-
-    try:
-        disk = shutil.disk_usage("/")
-        if disk.total > 0:
-            out["disk_used_percent"] = (disk.used / disk.total) * 100.0
-    except Exception:
-        pass
-    return out
-
-
-def _estimate_tokens_from_chars(chars: int) -> int:
-    # Coarse default for mixed CJK+Latin content in prompts.
-    return max(0, int(chars / 3))
 
 
 def _derive_env_prefix_from_placeholders(values: list[str], default_prefix: str) -> str:
@@ -1031,9 +991,11 @@ def run_webui(
                 exa_url = (exa_server.url or "") if exa_server else ""
                 if exa_server and re.search(r"exaApiKey=(&|$)", exa_url):
                     issues.append("exa_mcp: EXA_API_KEY not resolved")
-            health_score = max(0, 100 - len(issues) * 15)
-            ready_channel_count = max(0, len(enabled_channels) - len({x.split(":", 1)[0] for x in channel_issues}))
             snapshot = _read_host_resource_snapshot()
+            budget_alerts = collect_runtime_budget_alerts(cfg_resolved, snapshot)
+            penalty = (len(issues) * 15) + sum(18 if a.get("severity") == "error" else 8 for a in budget_alerts)
+            health_score = max(0, 100 - penalty)
+            ready_channel_count = max(0, len(enabled_channels) - len({x.split(":", 1)[0] for x in channel_issues}))
             load1 = snapshot.get("load1")
             mem_used_percent = snapshot.get("mem_used_percent")
             disk_used_percent = snapshot.get("disk_used_percent")
@@ -1067,6 +1029,28 @@ def run_webui(
                     action_rows.append(
                         f"<li>{escape(item)} · <a class='mono' href='/channels'>{t('fix in Channels page', '去渠道页面修复')}</a></li>"
                     )
+            for alert in budget_alerts[:4]:
+                severity = str(alert.get("severity") or "warn").upper()
+                message = str(alert.get("message") or "").strip()
+                suggestion = str(alert.get("suggestion") or "").strip()
+                if not message:
+                    continue
+                action_rows.append(
+                    f"<li>[{escape(severity)}] {escape(message)}"
+                    f"{f' · <span class=mono>{escape(suggestion)}</span>' if suggestion else ''}"
+                    f" · <a class='mono' href='/endpoints'>{t('tune budgets', '调整预算')}</a></li>"
+                )
+            budget_rows = []
+            for alert in budget_alerts[:5]:
+                severity = str(alert.get("severity") or "warn").upper()
+                message = str(alert.get("message") or "").strip()
+                suggestion = str(alert.get("suggestion") or "").strip()
+                if not message:
+                    continue
+                budget_rows.append(
+                    f"<li><code>{escape(severity)}</code> {escape(message)}"
+                    f"{f' · {escape(suggestion)}' if suggestion else ''}</li>"
+                )
             body = f"""
 <div class="grid cols-3">
   <section class="card">
@@ -1107,6 +1091,10 @@ def run_webui(
       <tr><th>{t("inline image cap", "内联图片上限")}</th><td>{inline_image_mb:.2f} MB</td></tr>
       <tr><th>{t("gc / cache", "gc / 缓存")}</th><td>gcEveryTurns={cfg.agents.defaults.gc_every_turns}, cache={cfg.agents.defaults.session_cache_max_entries}</td></tr>
     </table>
+    <div class="muted" style="margin-top:8px">{t("Budget alerts", "预算告警")}: {len(budget_alerts)}</div>
+    <ul class="list small">
+      {''.join(budget_rows) or f"<li>{t('No budget pressure detected.', '未检测到预算压力。')}</li>"}
+    </ul>
     <div class="muted">{t("Estimation uses ~1 token per 3 chars (mixed text).", "估算按约 1 token ≈ 3 chars（中英混合粗估）。")}</div>
   </section>
 </div>
@@ -1134,6 +1122,7 @@ def run_webui(
       <tr><th>{t("Export files", "导出文件数")}</th><td>{export_count}</td></tr>
       <tr><th>{t("Default model check", "默认模型检查")}</th><td>{'OK' if default_model_ok else 'FAIL'} ({escape(default_model_reason)})</td></tr>
       <tr><th>{t("Config migration hints", "配置迁移提示")}</th><td>{len(config_hints)}</td></tr>
+      <tr><th>{t("Budget alerts", "预算告警")}</th><td>{len(budget_alerts)}</td></tr>
       <tr><th>{t("Unavailable skills", "不可用技能")}</th><td>{len(unavailable_skills)}</td></tr>
       <tr><th>{t("MCP servers", "MCP 服务数")}</th><td>{len(mcp_servers)} ({len(cfg.tools.mcp_enabled_servers or [])} allowlisted)</td></tr>
     </table>

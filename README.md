@@ -1016,6 +1016,14 @@ It validates:
 - focused tests for language hints / files hub / export tool / web fetch
 - optional `nanobot status` + `nanobot doctor` runtime sanity (if `nanobot` is in PATH)
 
+For container deployments, also run the Docker end-to-end smoke:
+
+```bash
+./tests/test_docker.sh
+```
+
+This checks compose startup, `onboard/status/doctor`, path-token Web UI access, and `healthz`.
+
 Chat slash commands (CLI and chat channels):
 - `/new` — archive+clear current conversation session
 - `/model` — show current model (default or session override)
