@@ -23,10 +23,8 @@ docker compose build nanobot-gateway nanobot-webui
 echo "=== Starting compose services ==="
 docker compose up -d --force-recreate nanobot-gateway nanobot-webui
 
-echo "=== Running onboard and diagnostics inside gateway ==="
-docker compose exec -T nanobot-gateway sh -lc \
-  'if [ -f /root/.nanobot/config.json ]; then printf "n\n" | nanobot onboard; else nanobot onboard; fi' \
-  >/tmp/nanobot_onboard_smoke.txt 2>&1 || true
+echo "=== Running non-interactive diagnostics inside gateway ==="
+# Keep smoke tests deterministic: avoid onboarding prompts in CI/non-TTY runs.
 STATUS_OUTPUT="$(docker compose exec -T nanobot-gateway nanobot status 2>&1 || true)"
 DOCTOR_OUTPUT="$(docker compose exec -T nanobot-gateway nanobot doctor 2>&1 || true)"
 
