@@ -6,10 +6,7 @@ import json
 import os
 import re
 import secrets
-import shlex
-import shutil
 import socket
-import subprocess
 import threading
 import urllib.error
 import urllib.request
@@ -50,6 +47,18 @@ from nanobot.webui.catalog import (
     find_mcp_library_entry,
     install_skill_from_library,
 )
+from nanobot.webui.handlers import dispatch_post_route as _dispatch_post_route
+from nanobot.webui.i18n import (
+    UI_LANGUAGE_CHOICES as _UI_LANGUAGE_CHOICES,
+    normalize_ui_lang as _normalize_ui_lang,
+    ui_text as _ui_text,
+)
+from nanobot.webui.routes import dispatch_get_route as _dispatch_get_route
+from nanobot.webui.services import (
+    restart_gateway_runtime as _restart_gateway_runtime,
+    safe_positive_int as _safe_positive_int,
+    short_text as _short_text,
+)
 from nanobot.webui.diagnostics import (
     collect_channel_runtime_issues as _collect_channel_runtime_issues_impl,
     collect_config_migration_hints,
@@ -89,10 +98,6 @@ _REPLY_LANGUAGE_OPTIONS = [
 _MAX_SKILL_IMPORT_BYTES = 512 * 1024
 _MAX_REMOTE_JSON_BYTES = 1024 * 1024
 _MEDIA_PAGE_SIZE = 50
-_UI_LANGUAGE_CHOICES: list[tuple[str, str]] = [
-    ("en", "English"),
-    ("zh-CN", "简体中文"),
-]
 
 _CHANNEL_QUICK_SPECS: list[dict[str, Any]] = [
     {
@@ -332,107 +337,6 @@ def _collect_tool_policy_diagnostics(cfg: Config) -> list[str]:
     return _collect_tool_policy_diagnostics_impl(cfg)
 
 
-def _normalize_ui_lang(value: str | None) -> str:
-    lang = (value or "en").strip().lower()
-    return "zh-CN" if lang in {"zh", "zh-cn", "cn"} else "en"
-
-
-def _safe_positive_int(raw: str | None, *, default: int = 1, minimum: int = 1) -> int:
-    try:
-        value = int((raw or "").strip())
-    except Exception:
-        return default
-    return value if value >= minimum else default
-
-
-def _short_text(raw: str, *, limit: int = 180) -> str:
-    text = re.sub(r"\s+", " ", (raw or "").strip())
-    if len(text) <= limit:
-        return text
-    return text[: limit - 3] + "..."
-
-
-def _detect_compose_dirs() -> list[Path]:
-    candidates: list[Path] = []
-    from_env = (os.getenv("NANOBOT_WEBUI_COMPOSE_DIR") or "").strip()
-    if from_env:
-        candidates.append(Path(from_env).expanduser())
-    candidates.extend([Path.cwd(), Path("/root/nanobot-s"), Path("/app")])
-    out: list[Path] = []
-    compose_files = ("docker-compose.yml", "compose.yml", "compose.yaml")
-    for path in candidates:
-        p = path.resolve()
-        if p in out:
-            continue
-        if any((p / name).exists() for name in compose_files):
-            out.append(p)
-    return out
-
-
-def _run_cmd(
-    cmd: list[str],
-    *,
-    cwd: Path | None = None,
-    timeout: int = 30,
-) -> tuple[bool, str]:
-    try:
-        proc = subprocess.run(
-            cmd,
-            cwd=str(cwd) if cwd else None,
-            capture_output=True,
-            text=True,
-            timeout=timeout,
-            check=False,
-        )
-    except FileNotFoundError:
-        return False, f"command not found: {cmd[0]}"
-    except subprocess.TimeoutExpired:
-        return False, f"timeout after {timeout}s: {' '.join(cmd)}"
-    output = "\n".join(x for x in [proc.stdout.strip(), proc.stderr.strip()] if x).strip()
-    if proc.returncode == 0:
-        return True, output or "ok"
-    return False, output or f"exit code {proc.returncode}"
-
-
-def _restart_gateway_runtime() -> tuple[bool, str]:
-    override = (os.getenv("NANOBOT_WEBUI_RESTART_GATEWAY_CMD") or "").strip()
-    if override:
-        cmd = shlex.split(override)
-        if not cmd:
-            return False, "NANOBOT_WEBUI_RESTART_GATEWAY_CMD is empty after parsing"
-        ok, output = _run_cmd(cmd, timeout=45)
-        if ok:
-            return True, f"restart command ok: {' '.join(cmd)}"
-        return False, f"restart command failed: {output}"
-
-    candidates: list[tuple[list[str], Path | None]] = []
-    compose_dirs = _detect_compose_dirs()
-    if shutil.which("docker"):
-        for compose_dir in compose_dirs:
-            candidates.append((["docker", "compose", "restart", "nanobot-gateway"], compose_dir))
-        container_name = (os.getenv("NANOBOT_GATEWAY_CONTAINER") or "").strip() or "nanobot-gateway"
-        for name in {container_name, "nanobot-gateway"}:
-            candidates.append((["docker", "restart", name], None))
-    if shutil.which("docker-compose"):
-        for compose_dir in compose_dirs:
-            candidates.append((["docker-compose", "restart", "nanobot-gateway"], compose_dir))
-
-    if not candidates:
-        return False, (
-            "No restart backend detected. Set NANOBOT_WEBUI_RESTART_GATEWAY_CMD "
-            "or install docker/docker-compose CLI."
-        )
-
-    errors: list[str] = []
-    for cmd, cwd in candidates:
-        ok, output = _run_cmd(cmd, cwd=cwd, timeout=45)
-        if ok:
-            suffix = f" (cwd={cwd})" if cwd else ""
-            return True, f"{' '.join(cmd)}{suffix}"
-        errors.append(f"{' '.join(cmd)} => {_short_text(output)}")
-    return False, " ; ".join(errors[:3])
-
-
 def _mask_sensitive_url(url: str) -> str:
     raw = (url or "").strip()
     if not raw:
@@ -543,36 +447,6 @@ def _fetch_public_json(url: str, *, max_bytes: int = _MAX_REMOTE_JSON_BYTES) -> 
         return json.loads(blob.decode("utf-8", errors="replace"))
     except json.JSONDecodeError as e:
         raise ValueError(f"invalid JSON: {e}") from e
-
-
-_UI_TEXTS = {
-    "en": {
-        "tab_dashboard": "Dashboard",
-        "tab_models": "Models & APIs",
-        "tab_channels": "Channels",
-        "tab_mcp": "MCP",
-        "tab_skills": "Skills",
-        "tab_media": "Media",
-        "ui_lang": "Language",
-        "not_found": "Not Found",
-        "error": "Error",
-    },
-    "zh-CN": {
-        "tab_dashboard": "仪表盘",
-        "tab_models": "模型与接口",
-        "tab_channels": "渠道",
-        "tab_mcp": "MCP",
-        "tab_skills": "技能",
-        "tab_media": "媒体文件",
-        "ui_lang": "语言",
-        "not_found": "未找到页面",
-        "error": "错误",
-    },
-}
-
-
-def _ui_text(lang: str, key: str) -> str:
-    return _UI_TEXTS.get(lang, _UI_TEXTS["en"]).get(key, key)
 
 
 def _collect_skill_rows(config: Config) -> list[dict[str, Any]]:
@@ -726,28 +600,14 @@ def run_webui(
             msg = (params.get("msg") or [""])[0]
             err = (params.get("err") or [""])[0]
             try:
-                if route_path == "/":
-                    self._render_dashboard(msg=msg, err=err)
-                elif route_path == "/endpoints":
-                    self._render_endpoints(msg=msg, err=err)
-                elif route_path == "/channels":
-                    self._render_channels(msg=msg, err=err)
-                elif route_path == "/extensions":
-                    self._redirect("/mcp", msg=msg, err=err)
-                elif route_path == "/mcp":
-                    self._render_mcp(msg=msg, err=err)
-                elif route_path == "/skills":
-                    self._render_skills(msg=msg, err=err)
-                elif route_path == "/media":
-                    media_page = _safe_positive_int((params.get("media_page") or ["1"])[0], default=1)
-                    exports_page = _safe_positive_int((params.get("exports_page") or ["1"])[0], default=1)
-                    self._render_media(
-                        msg=msg,
-                        err=err,
-                        media_page=media_page,
-                        exports_page=exports_page,
-                    )
-                else:
+                handled = _dispatch_get_route(
+                    self,
+                    route_path,
+                    params=params,
+                    msg=msg,
+                    err=err,
+                )
+                if not handled:
                     self._send_html(404, self._page(_ui_text(self._ui_lang, "not_found"), "<p>Not Found</p>", tab=""))
             except Exception as e:  # keep UI resilient
                 self._send_html(500, self._page(_ui_text(self._ui_lang, "error"), f"<pre>{escape(str(e))}</pre>", tab=""))
@@ -761,25 +621,9 @@ def run_webui(
             form = self._read_form()
             self._ui_lang = _normalize_ui_lang(self._form_str(form, "ui_lang", self._ui_lang))
             try:
-                if route_path == "/endpoints":
-                    self._handle_post_endpoints(form)
-                    return
-                if route_path == "/channels":
-                    self._handle_post_channels(form)
-                    return
-                if route_path == "/mcp":
-                    self._handle_post_mcp(form)
-                    return
-                if route_path == "/skills":
-                    self._handle_post_skills(form)
-                    return
-                if route_path == "/extensions":
-                    self._handle_post_mcp(form)
-                    return
-                if route_path == "/media":
-                    self._handle_post_media(form)
-                    return
-                self._redirect("/", err="Unsupported action")
+                handled = _dispatch_post_route(self, route_path, form)
+                if not handled:
+                    self._redirect("/", err="Unsupported action")
             except Exception as e:
                 target = route_path if route_path in {"/endpoints", "/channels", "/mcp", "/skills", "/extensions", "/media"} else "/"
                 self._redirect(target, err=str(e))
