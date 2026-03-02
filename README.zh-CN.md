@@ -34,11 +34,35 @@ OrbitClaw 是独立维护的二次开发运行时，目标是：
 - [快速开始](#快速开始)
 - [模型配置示例](#模型配置示例)
 - [MCP 推荐接入](#mcp-推荐接入)
-- [发布流程（新仓库 main）](#发布流程新仓库-main)
 - [运行目录结构](#运行目录结构)
 - [后续开发路线（未完成）](#后续开发路线未完成)
 - [治理文档](#治理文档)
 - [上游归因](#上游归因)
+
+## OrbitClaw 优势亮点
+
+### 1) 面向真实场景，不是演示型项目
+
+- 默认策略围绕日常聊天自动化（尤其 Telegram）优化
+- 出错时优先返回可执行修复建议，而不是仅抛异常文本
+- 输出后处理策略可减少工具调用细节外泄
+
+### 2) 轻量优先
+
+- 默认参数针对 1C1G 主机可持续运行
+- 队列/超时/上下文预算都可显式配置
+- 可选能力保持可选，避免核心路径臃肿
+
+### 3) 可维护性更强
+
+- 核心回路和扩展点分层，降低后续改动风险
+- MCP/技能主要通过配置与 aliases 管理，替换成本低
+- 诊断与测试已纳入日常开发闭环（`status`、`doctor`、pytest）
+
+### 4) 中文优先但不锁死
+
+- 中文默认体验优先
+- 文档双语与 UI i18n 结构已就位，后续扩语种成本更可控
 
 ## 基本功能
 
@@ -149,30 +173,6 @@ OPENAI_API_KEY=sk-xxx
 2) 为常用能力建立 aliases
 3) 默认禁用非必要能力
 4) 输出配置 diff、健康检查结果和回滚步骤
-```
-
-## 发布流程（新仓库 main）
-
-你要求发布不走上游分支，直接在新仓库 `main` 发版。
-
-建议流程：
-
-1. 日常开发在 `codex/dev`
-2. 发版前建 `codex/release-x.y.z`
-3. 在新仓库 `main` 做 squash 合并
-4. 只在新仓库打 tag
-
-建议命令：
-
-```bash
-git remote add product <your-new-repo-url>
-git fetch product
-git checkout -B main
-git merge --squash codex/dev
-git commit -m "release: orbitclaw v0.1.1"
-git push product main --force-with-lease
-git tag v0.1.1
-git push product v0.1.1
 ```
 
 ## 运行目录结构

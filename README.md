@@ -34,11 +34,35 @@ OrbitClaw is an independently maintained secondary-development runtime built for
 - [Quick Start](#quick-start)
 - [Provider Configuration Example](#provider-configuration-example)
 - [MCP Recommendations](#mcp-recommendations)
-- [Release Workflow (New Repo Main)](#release-workflow-new-repo-main)
 - [Runtime Layout](#runtime-layout)
 - [Development Roadmap (Open)](#development-roadmap-open)
 - [Governance](#governance)
 - [Upstream Attribution](#upstream-attribution)
+
+## OrbitClaw Advantages
+
+### 1) Built for real usage, not demos
+
+- default behavior is tuned for practical chat operations (especially Telegram)
+- errors are returned with actionable fix hints, not raw stack noise
+- output policy reduces tool-detail leakage in user-facing replies
+
+### 2) Lightweight by default
+
+- designed around 1C1G-friendly runtime budgets
+- queue caps, timeout caps, and context budgets are first-class config fields
+- optional integrations stay optional instead of bloating core paths
+
+### 3) Better long-term maintainability
+
+- core loop and extension points are separated by design
+- MCP/skill changes can be done through config and aliases
+- diagnostics + tests are integrated into daily workflow (`status`, `doctor`, pytest)
+
+### 4) Chinese-first but not locale-locked
+
+- Chinese UX defaults for common usage paths
+- bilingual docs and i18n-ready UI structure for future language expansion
 
 ## Core Capabilities
 
@@ -147,30 +171,6 @@ Prompt template for adding a new MCP safely:
 Add MCP server "<name>" with minimum required tools only.
 Then add aliases for common tasks and keep all other tools disabled by default.
 Finally, run a health check and report config diff + rollback steps.
-```
-
-## Release Workflow (New Repo Main)
-
-You requested release from a new repository `main` branch, not upstream fork branches.
-
-Recommended flow:
-
-1. daily development on `codex/dev`
-2. release prep in a temporary `codex/release-x.y.z`
-3. merge/squash into new repo `main`
-4. tag on new repo only (`v0.1.1`, `v0.1.2`, ...)
-
-Suggested commands:
-
-```bash
-git remote add product <your-new-repo-url>
-git fetch product
-git checkout -B main
-git merge --squash codex/dev
-git commit -m "release: orbitclaw v0.1.1"
-git push product main --force-with-lease
-git tag v0.1.1
-git push product v0.1.1
 ```
 
 ## Runtime Layout

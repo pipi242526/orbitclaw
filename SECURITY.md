@@ -1,5 +1,7 @@
 # Security Policy
 
+**Language / 语言**: [English](SECURITY.md) | [简体中文](SECURITY.zh-CN.md)
+
 ## Reporting a Vulnerability
 
 If you discover a security vulnerability in orbitclaw, please report it by:

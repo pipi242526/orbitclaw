@@ -1,5 +1,7 @@
 # orbitclaw 本土化二开：工具与技能治理指南（中文）
 
+**Language / 语言**: [English](LOCALIZATION_GUIDE.md) | [简体中文](LOCALIZATION_GUIDE.zh-CN.md)
+
 本文档面向 `codex/dev` 分支，目标是先把工具与技能治理做稳，再逐步替换/新增更符合个人习惯的能力。
 
 ## 1. 当前已支持的治理能力（本分支）
