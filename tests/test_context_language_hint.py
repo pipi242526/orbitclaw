@@ -182,6 +182,137 @@ def test_policy_pipeline_formats_missing_tool_error(tmp_path: Path):
     assert "tools.aliases" in msg
 
 
+def test_policy_pipeline_sanitizes_tool_trace_lines(tmp_path: Path):
+    provider = MagicMock()
+    provider.get_default_model.return_value = "test-model"
+    ctx = ContextBuilder(tmp_path)
+    pipeline = PolicyPipeline(
+        provider=provider,
+        context=ctx,
+        default_model="test-model",
+        max_tokens=1024,
+        strip_think=lambda text: text,
+    )
+
+    draft = (
+        "我将调用 files_hub(action=\"list\")。\n"
+        "↳ 现在执行工具\n"
+        "Calling doc_read function with parameters: {\"file_path\": \"a.pdf\"}\n"
+        "╭──────────────────────────────╮\n"
+        "FastMCP 3.0.2\n"
+        "https://gofastmcp.com\n"
+        "╰──────────────────────────────╯\n"
+        "这是最终结果。"
+    )
+    cleaned = pipeline.sanitize_user_visible_output(draft)
+    assert "Calling doc_read function" not in cleaned
+    assert "FastMCP 3.0.2" not in cleaned
+    assert "这是最终结果。" in cleaned
+
+
+def test_policy_pipeline_formats_error_in_english_for_english_user(tmp_path: Path):
+    provider = MagicMock()
+    provider.get_default_model.return_value = "test-model"
+    ctx = ContextBuilder(tmp_path)
+    pipeline = PolicyPipeline(
+        provider=provider,
+        context=ctx,
+        default_model="test-model",
+        max_tokens=1024,
+        strip_think=lambda text: text,
+    )
+
+    msg = pipeline.format_user_error(RuntimeError("timeout"), user_message="please check this website")
+    assert msg.startswith("Request failed.")
+    assert "Suggestions:" in msg
+
+
+def test_policy_pipeline_processing_notice_follows_user_language(tmp_path: Path):
+    provider = MagicMock()
+    provider.get_default_model.return_value = "test-model"
+    ctx = ContextBuilder(tmp_path)
+    pipeline = PolicyPipeline(
+        provider=provider,
+        context=ctx,
+        default_model="test-model",
+        max_tokens=1024,
+        strip_think=lambda text: text,
+    )
+
+    assert pipeline.processing_notice(user_message="请帮我查天气") == "处理中，请稍候…"
+    assert pipeline.processing_notice(user_message="please check weather") == "Processing, please wait..."
+
+
+def test_policy_pipeline_localize_and_no_response_fallback(tmp_path: Path):
+    provider = MagicMock()
+    provider.get_default_model.return_value = "test-model"
+    ctx = ContextBuilder(tmp_path)
+    pipeline = PolicyPipeline(
+        provider=provider,
+        context=ctx,
+        default_model="test-model",
+        max_tokens=1024,
+        strip_think=lambda text: text,
+    )
+
+    assert pipeline.localize(en="ok", zh_cn="好的", user_message="你好") == "好的"
+    assert pipeline.localize(en="ok", zh_cn="好的", user_message="hello") == "ok"
+    assert "暂无可返回内容" in pipeline.no_response_fallback(user_message="请继续")
+
+
+def test_policy_pipeline_command_text_helpers(tmp_path: Path):
+    provider = MagicMock()
+    provider.get_default_model.return_value = "test-model"
+    ctx = ContextBuilder(tmp_path)
+    pipeline = PolicyPipeline(
+        provider=provider,
+        context=ctx,
+        default_model="test-model",
+        max_tokens=1024,
+        strip_think=lambda text: text,
+    )
+
+    assert "new session started" in pipeline.new_session_started(user_message="请重开会话").lower()
+    assert "命令" in pipeline.help_text(user_message="请给我帮助")
+    assert "Default model restored" in pipeline.model_reset_text(default_model="a/b", user_message="reset")
+    assert "未知命令" in pipeline.unknown_command_text(command_name="abc", user_message="请执行")
+
+
+def test_policy_pipeline_model_endpoints_hint_lines(tmp_path: Path):
+    provider = MagicMock()
+    provider.get_default_model.return_value = "test-model"
+    ctx = ContextBuilder(tmp_path)
+    pipeline = PolicyPipeline(
+        provider=provider,
+        context=ctx,
+        default_model="test-model",
+        max_tokens=1024,
+        strip_think=lambda text: text,
+    )
+
+    hints = {
+        "ohmygpt": ["gemini-2.5-flash-lite", "gpt-4o-mini", "qwen-plus", "deepseek-v3"],
+        "free": [],
+    }
+    zh_lines = pipeline.model_endpoints_hint_lines(endpoint_hints=hints, user_message="请看模型")
+    en_lines = pipeline.model_endpoints_hint_lines(endpoint_hints=hints, user_message="show models")
+    assert zh_lines[0].startswith("\n可切换端点")
+    assert "任意模型名" in "\n".join(zh_lines)
+    assert en_lines[0].startswith("\nSwitchable endpoints")
+    assert "any model name" in "\n".join(en_lines)
+
+
+@pytest.mark.asyncio
+async def test_agent_loop_unknown_command_returns_hint(tmp_path: Path):
+    bus = MessageBus()
+    provider = MagicMock()
+    provider.get_default_model.return_value = "test-model"
+    loop = AgentLoop(bus=bus, provider=provider, workspace=tmp_path, model="test-model")
+
+    msg = await loop.process_direct("/not_exist", channel="cli", chat_id="direct")
+    assert "/help" in msg
+
+
 @pytest.mark.asyncio
 async def test_reply_language_guard_rewrites_english_draft_for_chinese_user(tmp_path: Path):
     bus = MessageBus()

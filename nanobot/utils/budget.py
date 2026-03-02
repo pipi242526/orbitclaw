@@ -115,6 +115,57 @@ def collect_runtime_budget_alerts(config: Any, snapshot: dict[str, float | int |
             }
         )
 
+    turn_timeout_seconds = int(defaults.turn_timeout_seconds or 0)
+    if turn_timeout_seconds >= 300:
+        alerts.append(
+            {
+                "severity": "error",
+                "message": f"turn timeout is too high ({turn_timeout_seconds}s)",
+                "suggestion": "for a 1C1G host, keep turnTimeoutSeconds around 30-90",
+            }
+        )
+    elif turn_timeout_seconds >= 120:
+        alerts.append(
+            {
+                "severity": "warn",
+                "message": f"turn timeout is high ({turn_timeout_seconds}s)",
+                "suggestion": "long timeout can pin worker slots; consider <= 90s",
+            }
+        )
+
+    inbound_queue_maxsize = int(defaults.inbound_queue_maxsize or 0)
+    outbound_queue_maxsize = int(defaults.outbound_queue_maxsize or 0)
+    if inbound_queue_maxsize == 0 or outbound_queue_maxsize == 0:
+        alerts.append(
+            {
+                "severity": "warn",
+                "message": "queue max size is unbounded (0)",
+                "suggestion": "set inbound/outbound queue caps (e.g. 64-256) to avoid memory spikes",
+            }
+        )
+    if inbound_queue_maxsize >= 1024 or outbound_queue_maxsize >= 1024:
+        alerts.append(
+            {
+                "severity": "error",
+                "message": (
+                    "queue max size is too high "
+                    f"(in={inbound_queue_maxsize}, out={outbound_queue_maxsize})"
+                ),
+                "suggestion": "for a 1C1G host, keep queue caps around 64-256",
+            }
+        )
+    elif inbound_queue_maxsize >= 512 or outbound_queue_maxsize >= 512:
+        alerts.append(
+            {
+                "severity": "warn",
+                "message": (
+                    "queue max size is high "
+                    f"(in={inbound_queue_maxsize}, out={outbound_queue_maxsize})"
+                ),
+                "suggestion": "high queue caps increase worst-case memory footprint",
+            }
+        )
+
     mem_used = snapshot.get("mem_used_percent")
     if isinstance(mem_used, float):
         if mem_used >= 92:

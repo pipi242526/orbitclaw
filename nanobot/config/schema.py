@@ -203,6 +203,9 @@ class AgentDefaults(Base):
     system_prompt_cache_ttl_seconds: int = 20  # Reuse assembled system prompt to reduce CPU/IO
     session_cache_max_entries: int = 16  # In-memory session cache limit (LRU-like prune)
     gc_every_turns: int = 12  # Run gc.collect every N turns (0 disables)
+    turn_timeout_seconds: int = 45  # Per-turn hard timeout to prevent runaway execution
+    inbound_queue_maxsize: int = 128  # Inbound bus queue cap (0 = unbounded)
+    outbound_queue_maxsize: int = 128  # Outbound bus queue cap (0 = unbounded)
 
 
 class AgentsConfig(Base):

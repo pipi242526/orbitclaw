@@ -17,7 +17,9 @@ MCP_LIBRARY: list[dict[str, Any]] = [
     {
         "id": "exa",
         "name": "Exa Search",
+        "name_zh": "Exa 搜索",
         "desc": "Web search + code context (needs your own EXA_API_KEY).",
+        "desc_zh": "网页搜索 + 代码上下文（需要你自己的 EXA_API_KEY）。",
         "server_name": "exa",
         "config": MCPServerConfig(
             url="https://mcp.exa.ai/mcp?tools=web_search_exa,get_code_context_exa&exaApiKey=${EXA_API_KEY}"
@@ -26,7 +28,9 @@ MCP_LIBRARY: list[dict[str, Any]] = [
     {
         "id": "docloader",
         "name": "Document Loader",
+        "name_zh": "文档解析器",
         "desc": "Parse PDF/Word/PPT/Excel/images via FastMCP server.",
+        "desc_zh": "通过 FastMCP 解析 PDF/Word/PPT/Excel/图片。",
         "server_name": "docloader",
         "config": MCPServerConfig(
             command="uvx",
@@ -37,7 +41,9 @@ MCP_LIBRARY: list[dict[str, Any]] = [
     {
         "id": "fetch",
         "name": "Fetch",
+        "name_zh": "Fetch 抓取",
         "desc": "HTTP fetch/extract helper MCP (suitable for docs/web text).",
+        "desc_zh": "HTTP 抓取/提取 MCP（适合网页与文档文本）。",
         "server_name": "fetch",
         "config": MCPServerConfig(
             command="uvx",
@@ -47,7 +53,9 @@ MCP_LIBRARY: list[dict[str, Any]] = [
     {
         "id": "github",
         "name": "GitHub MCP",
+        "name_zh": "GitHub MCP",
         "desc": "GitHub API MCP (requires GITHUB_TOKEN).",
+        "desc_zh": "GitHub API MCP（需要 GITHUB_TOKEN）。",
         "server_name": "github_mcp",
         "config": MCPServerConfig(
             command="npx",
@@ -58,7 +66,9 @@ MCP_LIBRARY: list[dict[str, Any]] = [
     {
         "id": "filesystem",
         "name": "Filesystem MCP",
+        "name_zh": "文件系统 MCP",
         "desc": "Expose local directory as MCP filesystem tools.",
+        "desc_zh": "将本地目录暴露为 MCP 文件系统工具。",
         "server_name": "filesystem",
         "config": MCPServerConfig(
             command="npx",
@@ -68,7 +78,9 @@ MCP_LIBRARY: list[dict[str, Any]] = [
     {
         "id": "sqlite",
         "name": "SQLite MCP",
+        "name_zh": "SQLite MCP",
         "desc": "SQLite query MCP (local DB inspection).",
+        "desc_zh": "SQLite 查询 MCP（本地数据库排查）。",
         "server_name": "sqlite",
         "config": MCPServerConfig(
             command="npx",
@@ -78,7 +90,9 @@ MCP_LIBRARY: list[dict[str, Any]] = [
     {
         "id": "memory",
         "name": "Memory MCP",
+        "name_zh": "Memory MCP",
         "desc": "Simple key-value memory MCP server.",
+        "desc_zh": "轻量键值记忆 MCP 服务。",
         "server_name": "memory_mcp",
         "config": MCPServerConfig(
             command="npx",
@@ -88,7 +102,9 @@ MCP_LIBRARY: list[dict[str, Any]] = [
     {
         "id": "sequential",
         "name": "Sequential Thinking MCP",
+        "name_zh": "顺序思考 MCP",
         "desc": "Step-by-step reasoning helper MCP.",
+        "desc_zh": "分步推理辅助 MCP。",
         "server_name": "sequential_thinking",
         "config": MCPServerConfig(
             command="npx",
@@ -98,12 +114,12 @@ MCP_LIBRARY: list[dict[str, Any]] = [
 ]
 
 SKILL_LIBRARY: list[dict[str, Any]] = [
-    {"id": "memory", "name": "memory", "desc": "Persistent memory best-practice."},
-    {"id": "github", "name": "github", "desc": "GitHub workflow via gh CLI."},
-    {"id": "weather", "name": "weather", "desc": "Daily weather queries."},
-    {"id": "attachment-analyzer", "name": "attachment-analyzer", "desc": "Document/image analysis flow."},
-    {"id": "tmux", "name": "tmux", "desc": "Terminal session management."},
-    {"id": "summarize", "name": "summarize", "desc": "Long-content summarization."},
+    {"id": "memory", "name": "memory", "desc": "Persistent memory best-practice.", "desc_zh": "持久记忆最佳实践。"},
+    {"id": "github", "name": "github", "desc": "GitHub workflow via gh CLI.", "desc_zh": "通过 gh CLI 执行 GitHub 工作流。"},
+    {"id": "weather", "name": "weather", "desc": "Daily weather queries.", "desc_zh": "日常天气查询。"},
+    {"id": "attachment-analyzer", "name": "attachment-analyzer", "desc": "Document/image analysis flow.", "desc_zh": "文档/图片分析流程。"},
+    {"id": "tmux", "name": "tmux", "desc": "Terminal session management.", "desc_zh": "终端会话管理。"},
+    {"id": "summarize", "name": "summarize", "desc": "Long-content summarization.", "desc_zh": "长文本总结。"},
 ]
 
 
@@ -121,6 +137,13 @@ def find_skill_library_entry(entry_id: str) -> dict[str, Any] | None:
         if str(item.get("id", "")).strip() == wanted:
             return item
     return None
+
+
+def library_text(item: dict[str, Any], field: str, ui_lang: str) -> str:
+    """Return localized display text from library entry dict."""
+    if (ui_lang or "").strip().lower() in {"zh", "zh-cn", "cn"}:
+        return str(item.get(f"{field}_zh") or item.get(field) or "")
+    return str(item.get(f"{field}_en") or item.get(field) or "")
 
 
 def _extract_placeholders(text: str) -> set[str]:

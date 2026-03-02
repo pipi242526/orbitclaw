@@ -5,8 +5,8 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from nanobot.agent.tools.message import MessageTool
 from nanobot.agent.loop import AgentLoop
+from nanobot.agent.tools.message import MessageTool
 from nanobot.bus.queue import MessageBus
 from nanobot.channels.base import BaseChannel
 from nanobot.channels.telegram import TelegramChannel
@@ -88,6 +88,24 @@ async def test_message_tool_prefers_explicit_reply_to_over_message_id() -> None:
     await tool.execute(content="x", message_id="100", reply_to="200")
 
     assert sent[-1].reply_to == "200"
+
+
+@pytest.mark.asyncio
+async def test_message_tool_applies_output_sanitizer() -> None:
+    sent = []
+
+    async def _send(msg):
+        sent.append(msg)
+
+    tool = MessageTool(
+        send_callback=_send,
+        output_sanitizer=lambda text: text.replace("Calling doc_read function with parameters:", ""),
+        default_channel="telegram",
+        default_chat_id="42",
+    )
+    await tool.execute(content="Calling doc_read function with parameters: {\"x\":1}")
+
+    assert "Calling doc_read function with parameters:" not in sent[-1].content
 
 
 def test_agent_loop_reply_resolution_prefers_reply_to_field() -> None:

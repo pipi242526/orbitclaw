@@ -78,6 +78,7 @@ class ToolsetBuilder:
         registry: ToolRegistry,
         *,
         send_callback: Any | None = None,
+        message_output_sanitizer: Any | None = None,
         spawn_manager: Any | None = None,
         cron_service: Any | None = None,
         claude_code_config: Any | None = None,
@@ -92,7 +93,12 @@ class ToolsetBuilder:
                 )
             )
         if self.tool_enabled("message") and send_callback is not None:
-            registry.register(MessageTool(send_callback=send_callback))
+            registry.register(
+                MessageTool(
+                    send_callback=send_callback,
+                    output_sanitizer=message_output_sanitizer,
+                )
+            )
         if self.tool_enabled("spawn") and spawn_manager is not None:
             registry.register(SpawnTool(manager=spawn_manager))
         if self.tool_enabled("cron") and cron_service is not None:

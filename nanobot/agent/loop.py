@@ -7,6 +7,7 @@ import gc
 import json
 import re
 from contextlib import AsyncExitStack
+from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Awaitable, Callable
 
@@ -16,7 +17,6 @@ from nanobot.agent.context import ContextBuilder
 from nanobot.agent.memory import MemoryStore
 from nanobot.agent.policy_pipeline import PolicyPipeline
 from nanobot.agent.subagent import SubagentManager
-from nanobot.agent.toolset_builder import ToolsetBuilder
 from nanobot.agent.tooling import (
     is_mcp_server_enabled,
     is_tool_enabled,
@@ -33,6 +33,7 @@ from nanobot.agent.tools.spawn import SpawnTool
 from nanobot.agent.tools.web import (
     has_exa_search_mcp,
 )
+from nanobot.agent.toolset_builder import ToolsetBuilder
 from nanobot.bus.events import InboundMessage, OutboundMessage
 from nanobot.bus.queue import MessageBus
 from nanobot.providers.base import LLMProvider
@@ -58,6 +59,13 @@ class AgentLoop:
     _TOOL_RESULT_MAX_CHARS = 20000
     _GC_EVERY_TURNS = 12
     _SESSION_CACHE_MAX_ENTRIES = 16
+
+    @dataclass(frozen=True)
+    class _CommandSpec:
+        name: str
+        help_en: str
+        help_zh: str
+        handler: str
 
     def __init__(
         self,
@@ -95,6 +103,7 @@ class AgentLoop:
         system_prompt_cache_ttl_seconds: int = 20,
         session_cache_max_entries: int = _SESSION_CACHE_MAX_ENTRIES,
         gc_every_turns: int = _GC_EVERY_TURNS,
+        turn_timeout_seconds: int = 45,
     ):
         from nanobot.config.schema import ExecToolConfig
         self.bus = bus
@@ -115,6 +124,7 @@ class AgentLoop:
         self.tool_aliases = normalize_tool_aliases(tool_aliases)
         self.files_hub_exports_dir = files_hub_exports_dir or ""
         self._gc_every_turns = max(0, int(gc_every_turns or 0))
+        self._turn_timeout_seconds = max(5, int(turn_timeout_seconds or 45))
 
         self.context = ContextBuilder(
             workspace,
@@ -189,7 +199,10 @@ class AgentLoop:
         self._consolidation_tasks: set[asyncio.Task] = set()  # Strong refs to in-flight tasks
         self._consolidation_locks: dict[str, asyncio.Lock] = {}
         self._processed_turns = 0
+        self._command_specs: dict[str, AgentLoop._CommandSpec] = {}
+        self._command_aliases: dict[str, str] = {}
         self._register_default_tools()
+        self._register_builtin_commands()
 
     def _tool_enabled(self, name: str) -> bool:
         return is_tool_enabled(self.enabled_tools, name)
@@ -215,6 +228,7 @@ class AgentLoop:
         self.toolset.register_agent_extras(
             self.tools,
             send_callback=self.bus.publish_outbound,
+            message_output_sanitizer=self.policy.sanitize_user_visible_output,
             spawn_manager=self.subagents,
             cron_service=self.cron_service,
             claude_code_config=self.claude_code_config,
@@ -316,9 +330,8 @@ class AgentLoop:
             return f'{tc.name}("{val[:40]}…")' if len(val) > 40 else f'{tc.name}("{val}")'
         return ", ".join(_fmt(tc) for tc in tool_calls)
 
-    @staticmethod
-    def _processing_notice_text() -> str:
-        return "处理中，请稍候…"
+    def _processing_notice_text(self, user_message: str) -> str:
+        return self.policy.processing_notice(user_message=user_message)
 
     @staticmethod
     def _processing_notice_delay_for_channel(channel: str) -> float:
@@ -344,8 +357,189 @@ class AgentLoop:
             source_label="nanobot",
         )
 
-    def _format_user_error(self, err: Exception) -> str:
-        return self.policy.format_user_error(err)
+    def _format_user_error(self, err: Exception, *, user_message: str | None = None) -> str:
+        return self.policy.format_user_error(err, user_message=user_message)
+
+    def register_command(
+        self,
+        *,
+        name: str,
+        handler: str,
+        help_en: str,
+        help_zh: str,
+        aliases: list[str] | None = None,
+    ) -> None:
+        """Register a slash command and optional aliases.
+
+        This keeps command extension declarative: add one registration entry, then
+        implement the handler method.
+        """
+        key = (name or "").strip().lower().lstrip("/")
+        if not key:
+            raise ValueError("command name cannot be empty")
+        if not hasattr(self, handler):
+            raise ValueError(f"command handler not found: {handler}")
+        self._command_specs[key] = self._CommandSpec(
+            name=key,
+            help_en=help_en,
+            help_zh=help_zh,
+            handler=handler,
+        )
+        for alias in aliases or []:
+            a = (alias or "").strip().lower().lstrip("/")
+            if a:
+                self._command_aliases[a] = key
+
+    def _register_builtin_commands(self) -> None:
+        # Command extension template:
+        # 1) Implement handler: `async def _cmd_xxx(...)->OutboundMessage`
+        # 2) Register it once here via `register_command(...)`
+        # 3) Keep user-facing strings in PolicyPipeline (not in loop)
+        # 4) Add tests for routing + help listing + output text
+        self.register_command(
+            name="new",
+            handler="_cmd_new",
+            help_en="Start a new conversation",
+            help_zh="开始新会话",
+        )
+        self.register_command(
+            name="model",
+            handler="_cmd_model",
+            help_en="Show or switch model for this session",
+            help_zh="查看或切换当前会话模型",
+        )
+        self.register_command(
+            name="help",
+            handler="_cmd_help",
+            help_en="Show available commands",
+            help_zh="查看可用命令",
+            aliases=["h"],
+        )
+
+    @staticmethod
+    def _parse_slash_command(text: str) -> tuple[str, str] | None:
+        raw = (text or "").strip()
+        if not raw.startswith("/") or raw == "/":
+            return None
+        body = raw[1:]
+        name, _, arg = body.partition(" ")
+        key = name.strip().lower()
+        if not key:
+            return None
+        return key, arg.strip()
+
+    async def _dispatch_command(
+        self,
+        *,
+        command_name: str,
+        command_arg: str,
+        msg: InboundMessage,
+        session: Session,
+        mk_out: Callable[[str], OutboundMessage],
+    ) -> OutboundMessage | None:
+        canonical = self._command_aliases.get(command_name, command_name)
+        spec = self._command_specs.get(canonical)
+        if not spec:
+            return mk_out(self.policy.unknown_command_text(command_name=command_name, user_message=msg.content))
+        handler = getattr(self, spec.handler)
+        return await handler(command_arg=command_arg, msg=msg, session=session, mk_out=mk_out)
+
+    async def _cmd_new(
+        self,
+        *,
+        command_arg: str,
+        msg: InboundMessage,
+        session: Session,
+        mk_out: Callable[[str], OutboundMessage],
+    ) -> OutboundMessage:
+        _ = command_arg
+        lock = self._get_consolidation_lock(session.key)
+        self._consolidating.add(session.key)
+        try:
+            async with lock:
+                snapshot = session.messages[session.last_consolidated:]
+                if snapshot:
+                    temp = Session(key=session.key)
+                    temp.messages = list(snapshot)
+                    if not await self._consolidate_memory(
+                        temp,
+                        archive_all=True,
+                        model=self._effective_model_for_session(session),
+                    ):
+                        return mk_out(self.policy.memory_archive_failed(user_message=msg.content))
+        except Exception:
+            logger.exception("/new archival failed for {}", session.key)
+            return mk_out(self.policy.memory_archive_failed(user_message=msg.content))
+        finally:
+            self._consolidating.discard(session.key)
+            self._prune_consolidation_lock(session.key, lock)
+
+        session.clear()
+        self.sessions.save(session)
+        self.sessions.invalidate(session.key)
+        return mk_out(self.policy.new_session_started(user_message=msg.content))
+
+    async def _cmd_help(
+        self,
+        *,
+        command_arg: str,
+        msg: InboundMessage,
+        session: Session,
+        mk_out: Callable[[str], OutboundMessage],
+    ) -> OutboundMessage:
+        _ = (command_arg, session)
+        specs = sorted(self._command_specs.values(), key=lambda s: s.name)
+        lines = [(s.name, s.help_en, s.help_zh) for s in specs]
+        return mk_out(self.policy.help_text_from_specs(command_specs=lines, user_message=msg.content))
+
+    async def _cmd_model(
+        self,
+        *,
+        command_arg: str,
+        msg: InboundMessage,
+        session: Session,
+        mk_out: Callable[[str], OutboundMessage],
+    ) -> OutboundMessage:
+        arg = (command_arg or "").strip()
+        current_model = self._effective_model_for_session(session)
+        if not arg:
+            source = self.policy.model_source_label(
+                has_override=bool(session.metadata.get("model_override")),
+                user_message=msg.content,
+            )
+            endpoint_lines = self.policy.model_endpoints_hint_lines(
+                endpoint_hints=self.provider.list_switchable_endpoints(),
+                user_message=msg.content,
+            )
+            return mk_out(
+                self.policy.model_status_text(
+                    current_model=current_model,
+                    default_model=self.model,
+                    source=source,
+                    endpoint_lines=endpoint_lines,
+                    user_message=msg.content,
+                )
+            )
+        if arg.lower() in {"reset", "default"}:
+            session.metadata.pop("model_override", None)
+            self.sessions.save(session)
+            return mk_out(self.policy.model_reset_text(default_model=self.model, user_message=msg.content))
+        try:
+            ok, detail = self.provider.prepare_model(arg)
+        except Exception as e:
+            ok, detail = False, str(e)
+        if not ok:
+            return mk_out(self.policy.model_switch_failed_text(detail=(detail or ""), user_message=msg.content))
+        session.metadata["model_override"] = arg
+        self.sessions.save(session)
+        return mk_out(
+            self.policy.model_switched_text(
+                model_ref=arg,
+                session_key=session.key,
+                routing_detail=(detail or ""),
+                user_message=msg.content,
+            )
+        )
 
     @staticmethod
     def _resolve_reply_to(metadata: dict[str, Any] | None) -> str | None:
@@ -385,6 +579,7 @@ class AgentLoop:
         on_progress: Callable[[str], Awaitable[None]] | None = None,
         model: str | None = None,
         emit_tool_hints: bool = True,
+        user_message: str = "",
     ) -> tuple[str | None, list[str]]:
         """Run the agent iteration loop. Returns (final_content, tools_used)."""
         messages = initial_messages
@@ -413,7 +608,7 @@ class AgentLoop:
                         if emit_tool_hints:
                             await on_progress(self._tool_hint(response.tool_calls))
                         else:
-                            await on_progress(self._processing_notice_text())
+                            await on_progress(self._processing_notice_text(user_message))
 
                 tool_call_dicts = [
                     {
@@ -459,7 +654,10 @@ class AgentLoop:
                     timeout=1.0
                 )
                 try:
-                    response = await self._process_message(msg)
+                    response = await asyncio.wait_for(
+                        self._process_message(msg),
+                        timeout=float(self._turn_timeout_seconds),
+                    )
                     if response is not None:
                         await self.bus.publish_outbound(response)
                     elif msg.channel == "cli":
@@ -471,7 +669,7 @@ class AgentLoop:
                     await self.bus.publish_outbound(OutboundMessage(
                         channel=msg.channel,
                         chat_id=msg.chat_id,
-                        content=self._format_user_error(e),
+                        content=self._format_user_error(e, user_message=msg.content),
                         reply_to=self._resolve_reply_to(msg.metadata),
                         metadata=msg.metadata or {},
                     ))
@@ -525,12 +723,18 @@ class AgentLoop:
                 history=session.get_history(max_messages=self.memory_window),
                 current_message=msg.content, channel=channel, chat_id=chat_id,
             )
-            final_content, _ = await self._run_agent_loop(messages)
+            final_content, _ = await self._run_agent_loop(messages, user_message=msg.content)
+            if final_content is None:
+                final_content = self.policy.background_task_completed(user_message=msg.content)
+            final_content = await self._enforce_reply_language(
+                user_message=msg.content,
+                draft_reply=final_content,
+                model=self._effective_model_for_session(session),
+            )
             session.add_message("user", f"[System: {msg.sender_id}] {msg.content}")
-            session.add_message("assistant", final_content or "Background task completed.")
+            session.add_message("assistant", final_content)
             self.sessions.save(session)
-            return OutboundMessage(channel=channel, chat_id=chat_id,
-                                  content=final_content or "Background task completed.")
+            return OutboundMessage(channel=channel, chat_id=chat_id, content=final_content)
 
         preview = msg.content[:80] + "..." if len(msg.content) > 80 else msg.content
         logger.info("Processing message from {}:{}: {}", msg.channel, msg.sender_id, preview)
@@ -549,76 +753,18 @@ class AgentLoop:
         session = self.sessions.get_or_create(key)
 
         # Slash commands
-        cmd_text = msg.content.strip()
-        cmd = cmd_text.lower()
-        if cmd == "/new":
-            lock = self._get_consolidation_lock(session.key)
-            self._consolidating.add(session.key)
-            try:
-                async with lock:
-                    snapshot = session.messages[session.last_consolidated:]
-                    if snapshot:
-                        temp = Session(key=session.key)
-                        temp.messages = list(snapshot)
-                        if not await self._consolidate_memory(
-                            temp,
-                            archive_all=True,
-                            model=self._effective_model_for_session(session),
-                        ):
-                            return _mk_out("Memory archival failed, session not cleared. Please try again.")
-            except Exception:
-                logger.exception("/new archival failed for {}", session.key)
-                return _mk_out("Memory archival failed, session not cleared. Please try again.")
-            finally:
-                self._consolidating.discard(session.key)
-                self._prune_consolidation_lock(session.key, lock)
-
-            session.clear()
-            self.sessions.save(session)
-            self.sessions.invalidate(session.key)
-            return _mk_out("New session started.")
-        if cmd == "/help":
-            return _mk_out("🐈 nanobot commands:\n/new — Start a new conversation\n/model — Show or switch model for this session\n/help — Show available commands")
-
-        if cmd == "/model" or cmd.startswith("/model "):
-            current_model = self._effective_model_for_session(session)
-            arg = cmd_text[6:].strip() if len(cmd_text) >= 6 else ""
-            if not arg:
-                source = "session override" if session.metadata.get("model_override") else "default"
-                endpoint_hints = self.provider.list_switchable_endpoints()
-                endpoint_lines: list[str] = []
-                if endpoint_hints:
-                    endpoint_lines.append("\n可切换端点:")
-                    for name, models in list(endpoint_hints.items())[:8]:
-                        if models:
-                            preview = ", ".join(f"`{name}/{m}`" for m in models[:3])
-                            more = f" 等 {len(models)} 个" if len(models) > 3 else ""
-                            endpoint_lines.append(f"- {name}: {preview}{more}")
-                        else:
-                            endpoint_lines.append(f"- {name}: `{name}/<model>` (任意模型名)")
-                return _mk_out(
-                    "当前模型设置\n"
-                    f"- 生效模型: `{current_model}` ({source})\n"
-                    f"- 默认模型: `{self.model}`\n\n"
-                    "用法:\n"
-                    "- `/model provider/model-name` 切换当前会话模型\n"
-                    "- `/model reset` 恢复默认模型"
-                    + ("\n" + "\n".join(endpoint_lines) if endpoint_lines else "")
-                )
-            if arg.lower() in {"reset", "default"}:
-                session.metadata.pop("model_override", None)
-                self.sessions.save(session)
-                return _mk_out(f"已恢复默认模型: `{self.model}`")
-            try:
-                ok, detail = self.provider.prepare_model(arg)
-            except Exception as e:
-                ok, detail = False, str(e)
-            if not ok:
-                return _mk_out(f"模型切换失败: {detail or '未知错误'}")
-            session.metadata["model_override"] = arg
-            self.sessions.save(session)
-            extra = f"\n路由: {detail}" if detail else ""
-            return _mk_out(f"当前会话模型已切换为: `{arg}`\n提示: 仅影响当前会话（{session.key}）。{extra}")
+        parsed_cmd = self._parse_slash_command(msg.content)
+        if parsed_cmd:
+            command_name, command_arg = parsed_cmd
+            handled = await self._dispatch_command(
+                command_name=command_name,
+                command_arg=command_arg,
+                msg=msg,
+                session=session,
+                mk_out=_mk_out,
+            )
+            if handled is not None:
+                return handled
 
         unconsolidated = len(session.messages) - session.last_consolidated
         if (unconsolidated >= self.memory_window and session.key not in self._consolidating):
@@ -680,7 +826,7 @@ class AgentLoop:
                     await self.bus.publish_outbound(OutboundMessage(
                         channel=msg.channel,
                         chat_id=msg.chat_id,
-                        content=self._processing_notice_text(),
+                        content=self._processing_notice_text(msg.content),
                         reply_to=reply_to_id,
                         metadata=meta,
                     ))
@@ -694,6 +840,7 @@ class AgentLoop:
                 on_progress=on_progress or _bus_progress,
                 model=effective_model,
                 emit_tool_hints=(msg.channel == "cli"),
+                user_message=msg.content,
             )
         finally:
             if processing_notice_task and not processing_notice_task.done():
@@ -704,7 +851,7 @@ class AgentLoop:
                     pass
 
         if final_content is None:
-            final_content = "I've completed processing but have no response to give."
+            final_content = self.policy.no_response_fallback(user_message=msg.content)
         final_content = await self._enforce_reply_language(
             user_message=msg.content,
             draft_reply=final_content,
@@ -744,7 +891,16 @@ class AgentLoop:
         await self._connect_mcp()
         msg = InboundMessage(channel=channel, sender_id="user", chat_id=chat_id, content=content)
         try:
-            response = await self._process_message(msg, session_key=session_key, on_progress=on_progress)
+            response = await asyncio.wait_for(
+                self._process_message(msg, session_key=session_key, on_progress=on_progress),
+                timeout=float(self._turn_timeout_seconds),
+            )
             return response.content if response else ""
+        except asyncio.TimeoutError:
+            error = TimeoutError(f"turn timed out after {self._turn_timeout_seconds}s")
+            return self._format_user_error(error, user_message=content)
+        except Exception as e:
+            logger.error("Error in process_direct: {}", e)
+            return self._format_user_error(e, user_message=content)
         finally:
             self._maybe_release_memory(active_session_key=session_key)

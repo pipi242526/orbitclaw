@@ -12,11 +12,13 @@ class MessageTool(Tool):
     def __init__(
         self,
         send_callback: Callable[[OutboundMessage], Awaitable[None]] | None = None,
+        output_sanitizer: Callable[[str], str] | None = None,
         default_channel: str = "",
         default_chat_id: str = "",
         default_message_id: str | None = None,
     ):
         self._send_callback = send_callback
+        self._output_sanitizer = output_sanitizer
         self._default_channel = default_channel
         self._default_chat_id = default_chat_id
         self._default_message_id = default_message_id
@@ -31,6 +33,10 @@ class MessageTool(Tool):
     def set_send_callback(self, callback: Callable[[OutboundMessage], Awaitable[None]]) -> None:
         """Set the callback for sending messages."""
         self._send_callback = callback
+
+    def set_output_sanitizer(self, sanitizer: Callable[[str], str]) -> None:
+        """Set optional sanitizer for user-visible message content."""
+        self._output_sanitizer = sanitizer
 
     def start_turn(self) -> None:
         """Reset per-turn send tracking."""
@@ -116,6 +122,9 @@ class MessageTool(Tool):
 
         normalized_attachments = list(attachments or [])
         normalized_media = list(media or [])
+        outbound_content = str(content or "")
+        if self._output_sanitizer is not None:
+            outbound_content = self._output_sanitizer(outbound_content)
         for item in normalized_attachments:
             if isinstance(item, dict):
                 path = item.get("path")
@@ -125,7 +134,7 @@ class MessageTool(Tool):
         msg = OutboundMessage(
             channel=channel,
             chat_id=chat_id,
-            content=content,
+            content=outbound_content,
             reply_to=str(resolved_reply_to) if resolved_reply_to else None,
             media=normalized_media,
             attachments=normalized_attachments,

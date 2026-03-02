@@ -12,7 +12,11 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
 
-from nanobot.config.schema import Config, MCPServerConfig
+from nanobot.config.presets import (
+    apply_recommended_tool_defaults as _apply_recommended_tool_defaults,
+    merge_unique as _merge_unique,
+)
+from nanobot.config.schema import Config
 from nanobot.utils.helpers import get_media_dir
 
 _ENDPOINT_TYPES = [
@@ -33,15 +37,15 @@ _ENDPOINT_TYPES = [
     "volcengine",
 ]
 
-_REPLY_LANGUAGE_OPTIONS = [
-    ("auto", "auto (跟随用户消息)"),
-    ("zh-CN", "zh-CN (简体中文)"),
-    ("en", "en (English)"),
-    ("ja", "ja (日本語)"),
-    ("ko", "ko (한국어)"),
-    ("fr", "fr (Français)"),
-    ("de", "de (Deutsch)"),
-    ("es", "es (Español)"),
+_REPLY_LANGUAGE_CODES = [
+    "auto",
+    "zh-CN",
+    "en",
+    "ja",
+    "ko",
+    "fr",
+    "de",
+    "es",
 ]
 
 _MAX_SKILL_IMPORT_BYTES = 512 * 1024
@@ -163,40 +167,6 @@ _CHANNEL_QUICK_SPECS: list[dict[str, Any]] = [
         ],
     },
 ]
-
-
-def _merge_unique(items: list[str], additions: list[str]) -> list[str]:
-    out: list[str] = []
-    for value in [*(items or []), *(additions or [])]:
-        v = str(value).strip()
-        if v and v not in out:
-            out.append(v)
-    return out
-
-
-def _apply_recommended_tool_defaults(config: Config) -> None:
-    """Mirror CLI onboarding lightweight defaults for UI users."""
-    tools = config.tools
-    if not tools.web.search.provider or tools.web.search.provider not in {"exa_mcp", "disabled"}:
-        tools.web.search.provider = "exa_mcp"
-    if "exa" not in tools.mcp_servers:
-        tools.mcp_servers["exa"] = MCPServerConfig(
-            url="https://mcp.exa.ai/mcp?tools=web_search_exa,get_code_context_exa&exaApiKey=${EXA_API_KEY}"
-        )
-    if "docloader" not in tools.mcp_servers:
-        tools.mcp_servers["docloader"] = MCPServerConfig(
-            command="uvx",
-            args=["awslabs.document-loader-mcp-server@latest"],
-            env={"FASTMCP_LOG_LEVEL": "ERROR"},
-        )
-    tools.mcp_enabled_servers = _merge_unique(tools.mcp_enabled_servers, ["exa", "docloader"])
-    tools.mcp_enabled_tools = _merge_unique(
-        tools.mcp_enabled_tools,
-        ["web_search_exa", "get_code_context_exa", "read_document", "read_image"],
-    )
-    tools.aliases.setdefault("code_search", "mcp_exa_get_code_context_exa")
-    tools.aliases.setdefault("doc_read", "mcp_docloader_read_document")
-    tools.aliases.setdefault("image_read", "mcp_docloader_read_image")
 
 
 def _parse_csv(value: str) -> list[str]:
@@ -455,4 +425,3 @@ def _list_store_rows(root: Path) -> list[dict[str, Any]]:
 
 def _list_media_rows() -> list[dict[str, Any]]:
     return _list_store_rows(get_media_dir())
-
