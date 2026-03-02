@@ -65,3 +65,9 @@ def test_runtime_guard_not_ready_when_stale(tmp_path):
     ready, reason_en, _ = evaluate_gateway_runtime_status(cfg_path)
     assert ready is False
     assert "not alive" in reason_en
+
+
+def test_webui_post_actions_importable():
+    import orbitclaw.webui.post_actions as post_actions
+
+    assert hasattr(post_actions, "handle_post_endpoints")

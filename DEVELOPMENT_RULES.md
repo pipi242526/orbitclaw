@@ -1,29 +1,39 @@
 # Development Rules (orbitclaw-s)
 
+**Language / 语言**: [English](DEVELOPMENT_RULES.md) | [简体中文](DEVELOPMENT_RULES.zh-CN.md)
+
 This fork follows a pragmatic, lightweight engineering policy.
 
-## 0) Project Iron Laws (Non-negotiable)
+## 0) Project Guardrails (Default Rules)
 
 1. Resource law:
-   - Every release must keep explicit budget ceilings for free memory, per-turn token usage, tool timeout, and queue length.
-   - New features cannot ship without budget impact notes.
+   - Every release should keep explicit budget ceilings for free memory, per-turn token usage, tool timeout, and queue length.
+   - New features should include budget impact notes; urgent exceptions are allowed with follow-up tasks.
 2. Output law:
    - Final output must follow the configured language strategy.
    - Internal tool/MCP invocation details must not leak to end users by default.
    - Failures must include reason and actionable fix suggestions.
 3. Interface law:
    - Keep one unified message contract (`reply_to`, `actions`, `attachments`).
-   - Channel adapters only map protocol differences; they must not own business logic.
+   - Channel adapters should mainly map protocol differences; business logic should stay in core/runtime services.
 4. Configuration law:
    - Environment variables first, plaintext secrets minimized.
-   - Every config mutation path must be reversible (clear fallback or rollback path).
+   - Every config mutation path should be reversible (clear fallback or rollback path).
 5. Extension law:
-   - New channel / MCP / skill integrations must be plug-in style, with zero invasive changes to the core agent loop.
+   - New channel / MCP / skill integrations should be plug-in style and avoid invasive core-loop rewrites.
 6. Evolution law:
-   - Every release must include an upstream patch audit record with explicit accept/reject/defer decisions.
+   - Every release should include an upstream patch audit record with explicit accept/reject/defer decisions.
 7. Quality law:
    - New/modified code must include focused tests and pass incremental lint checks.
    - Legacy lint debt is allowed temporarily but must never increase unnoticed.
+
+### Exceptions
+
+Temporary exceptions are allowed when needed for emergency fixes or release timing, but each exception should include:
+
+1. reason and impact scope
+2. rollback or mitigation path
+3. follow-up issue/commit target
 
 ## 1) Priorities
 

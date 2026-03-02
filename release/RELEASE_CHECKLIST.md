@@ -25,6 +25,8 @@
 - [ ] Release notes include breaking/non-breaking sections
 - [ ] README/Quick Start reflects current defaults
 - [ ] Attribution to upstream project remains explicit
+- [ ] Product release is published on the new repository `main` branch (not upstream fork branches)
+- [ ] Release tag (`vX.Y.Z`) is created and pushed on the product repository
 
 ## Runtime Validation
 

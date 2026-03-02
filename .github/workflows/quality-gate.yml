@@ -5,6 +5,9 @@ on:
   push:
     branches:
       - codex/dev
+      - main
+    tags:
+      - "v*"
 
 jobs:
   incremental-quality:

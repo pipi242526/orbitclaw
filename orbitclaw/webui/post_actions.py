@@ -13,6 +13,10 @@ from typing import Any
 from urllib.parse import urlparse
 
 from orbitclaw.config.loader import load_config
+from orbitclaw.config.presets import (
+    apply_recommended_tool_defaults as _apply_recommended_tool_defaults,
+)
+from orbitclaw.config.presets import merge_unique as _merge_unique
 from orbitclaw.config.schema import (
     ChannelsConfig,
     EndpointProviderConfig,
@@ -29,13 +33,11 @@ from orbitclaw.webui.catalog import (
 from orbitclaw.webui.common import (
     _CHANNEL_QUICK_SPECS,
     _MAX_SKILL_IMPORT_BYTES,
-    _apply_recommended_tool_defaults,
     _check_default_model_ref,
     _collect_skill_rows,
     _fetch_public_json,
     _get_nested_attr,
     _is_private_or_local_host,
-    _merge_unique,
     _parse_csv,
     _safe_int,
     _safe_json_object,

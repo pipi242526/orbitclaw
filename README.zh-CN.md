@@ -1,0 +1,227 @@
+<div align="center">
+  <img src="assets/orbitclaw-banner.svg" alt="OrbitClaw banner" width="920" />
+
+# OrbitClaw
+
+**面向 Telegram 优先自动化与本地运维的轻量 Agent 运行时**
+
+<p>
+  <img src="https://img.shields.io/badge/Python-3.11%2B-3776AB?style=flat&logo=python&logoColor=white" alt="Python" />
+  <img src="https://img.shields.io/badge/License-MIT-16a34a?style=flat" alt="License" />
+  <img src="https://img.shields.io/badge/Version-0.1.1-0ea5e9?style=flat" alt="Version" />
+  <img src="https://img.shields.io/badge/Profile-1C1G%20friendly-0f766e?style=flat" alt="Profile" />
+  <img src="https://img.shields.io/badge/Status-Release%20Candidate-f97316?style=flat" alt="Status" />
+</p>
+
+**Language / 语言**: [English](README.md) | [简体中文](README.zh-CN.md)
+
+</div>
+
+---
+
+## 项目定位
+
+OrbitClaw 是独立维护的二次开发运行时，目标是：
+
+- 中文使用习惯友好，Telegram 优先
+- 小机器（1C1G）也能稳定跑
+- MCP/技能可插拔，核心回路不过度膨胀
+- WebUI + CLI 配置和诊断闭环
+
+## 目录
+
+- [基本功能](#基本功能)
+- [快速开始](#快速开始)
+- [模型配置示例](#模型配置示例)
+- [MCP 推荐接入](#mcp-推荐接入)
+- [发布流程（新仓库 main）](#发布流程新仓库-main)
+- [运行目录结构](#运行目录结构)
+- [后续开发路线（未完成）](#后续开发路线未完成)
+- [治理文档](#治理文档)
+- [上游归因](#上游归因)
+
+## 基本功能
+
+### 1) 机器人核心能力（优先级最高）
+
+- 统一消息处理主循环与命令路由
+- 统一输出后处理（语言统一、输出去泄露、失败修复建议）
+- 上下文预算控制（history/memory/background/inline media）
+- 队列上限与超时机制，提升可预测性
+
+### 2) 工具与技能
+
+- 内置网页检索/抓取、文件读写、Shell 执行等能力
+- `tools.aliases` 支持上层习惯不变、底层工具可替换
+- MCP 过滤器支持精细启停与暴露控制
+
+### 3) 多渠道适配
+
+- 默认推荐 Telegram
+- 支持 Discord / Feishu / DingTalk / QQ / Slack / WhatsApp / Email / Mochat
+- 渠道层负责协议映射，业务逻辑尽量收敛到核心层
+
+### 4) 运维与诊断
+
+- `orbitclaw status` / `orbitclaw doctor`
+- WebUI 管理模型、渠道、MCP、技能、媒体
+- Docker 部署与共享数据目录一致性检查
+
+## 快速开始
+
+### 1) 安装
+
+```bash
+git clone <your-orbitclaw-repo-url>
+cd orbitclaw
+pip install -e .
+```
+
+### 2) 初始化
+
+```bash
+orbitclaw onboard
+```
+
+### 3) 启动 gateway
+
+```bash
+orbitclaw gateway
+```
+
+### 4) 启动 WebUI
+
+```bash
+orbitclaw webui --host 0.0.0.0 --port 18791
+```
+
+WebUI 使用路径密钥访问（不弹账号密码框）。
+
+## 模型配置示例
+
+编辑 `/Users/<you>/.orbitclaw/config.json`：
+
+```json
+{
+  "providers": {
+    "endpoints": {
+      "openai": {
+        "type": "openai_compatible",
+        "apiBase": "https://api.openai.com/v1",
+        "apiKey": "${OPENAI_API_KEY}",
+        "models": ["gpt-4o-mini", "gpt-4.1-mini"]
+      }
+    }
+  },
+  "agents": {
+    "defaults": {
+      "model": "openai/gpt-4o-mini",
+      "temperature": 0.1
+    }
+  }
+}
+```
+
+密钥写入 `/Users/<you>/.orbitclaw/.env`：
+
+```bash
+OPENAI_API_KEY=sk-xxx
+```
+
+## MCP 推荐接入
+
+可参考中文 MCP 聚合清单：
+
+- [Awesome-MCP-ZH](https://github.com/yzfly/Awesome-MCP-ZH?tab=readme-ov-file)
+
+建议接入策略：
+
+1. 只装当前任务必需的 MCP，避免臃肿
+2. 用 `tools.aliases` 固定常用入口（`doc_read`、`image_read`、`code_search`）
+3. 每次新增 MCP 后跑一次 `orbitclaw doctor`
+4. 记录资源影响，再决定是否默认启用
+
+建议提示词模板：
+
+```text
+请按“最小暴露”原则接入 MCP <name>：
+1) 仅开启必要 tools
+2) 为常用能力建立 aliases
+3) 默认禁用非必要能力
+4) 输出配置 diff、健康检查结果和回滚步骤
+```
+
+## 发布流程（新仓库 main）
+
+你要求发布不走上游分支，直接在新仓库 `main` 发版。
+
+建议流程：
+
+1. 日常开发在 `codex/dev`
+2. 发版前建 `codex/release-x.y.z`
+3. 在新仓库 `main` 做 squash 合并
+4. 只在新仓库打 tag
+
+建议命令：
+
+```bash
+git remote add product <your-new-repo-url>
+git fetch product
+git checkout -B main
+git merge --squash codex/dev
+git commit -m "release: orbitclaw v0.1.1"
+git push product main --force-with-lease
+git tag v0.1.1
+git push product v0.1.1
+```
+
+## 运行目录结构
+
+```text
+orbitclaw/
+├── orbitclaw/          # 运行时核心
+├── assets/             # 品牌资源
+├── docs/               # 产品/运维/开发文档
+├── release/            # 治理与发版清单
+├── scripts/            # 脚本与质量工具
+└── tests/              # 回归测试
+```
+
+关键运行目录：
+
+- `/Users/<you>/.orbitclaw/config.json`
+- `/Users/<you>/.orbitclaw/.env`
+- `/Users/<you>/.orbitclaw/env/`
+- `/Users/<you>/.orbitclaw/workspace`
+- `/Users/<you>/.orbitclaw/mcp`
+- `/Users/<you>/.orbitclaw/skills`
+- `/Users/<you>/.orbitclaw/media`
+- `/Users/<you>/.orbitclaw/exports`
+
+## 后续开发路线（未完成）
+
+以下项先不打勾，完成后再改为 `[x]`：
+
+- [ ] 按可单测职责继续拆分大文件（`cli/commands.py`、`channels/mochat.py`、`channels/feishu.py`）
+- [ ] 渠道管理保持集中，但协议映射与核心业务进一步分层
+- [ ] 发布工程完善（新仓库 main 发版、CI 分支/Tag 闸门）
+- [ ] 依赖瘦身方案（默认最小安装 + 可选渠道扩展）
+- [ ] WebUI 交互整理与视觉升级（在核心机器人稳定后进行）
+- [ ] MCP 推荐库与一键接入说明继续完善
+- [ ] 先持续打磨机器人核心能力，再扩展渠道能力
+
+## 治理文档
+
+- 工程规则：`DEVELOPMENT_RULES.md`
+- 安全策略：`SECURITY.md`
+- 质量闸门：`release/QUALITY_GATE.md`
+- 发布清单：`release/RELEASE_CHECKLIST.md`
+- 上游补丁审计策略：`release/UPSTREAM_PATCH_AUDIT.md`
+- 月度审计记录：`release/upstream-audits/`
+
+## 上游归因
+
+本项目基于 [HKUDS/nanobot](https://github.com/HKUDS/nanobot) 二次开发，并遵循 MIT 兼容许可。
+
+- 归因详情：`NOTICE`
+- 许可证：`LICENSE`

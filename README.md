@@ -1,45 +1,75 @@
 <div align="center">
-  <img src="assets/orbitclaw-banner.svg" alt="OrbitClaw banner" width="900" />
-</div>
+  <img src="assets/orbitclaw-banner.svg" alt="OrbitClaw banner" width="920" />
 
 # OrbitClaw
 
-OrbitClaw is a lightweight, Chinese-first agent runtime for practical personal automation.
+**Practical lightweight agent runtime for Telegram-first automation and local ops**
 
-- TG-first channel experience
-- MCP/Skill extensibility with low coupling
-- Resource-budgeted runtime for small servers (1C1G oriented)
-- Web console for day-to-day ops
+<p>
+  <img src="https://img.shields.io/badge/Python-3.11%2B-3776AB?style=flat&logo=python&logoColor=white" alt="Python" />
+  <img src="https://img.shields.io/badge/License-MIT-16a34a?style=flat" alt="License" />
+  <img src="https://img.shields.io/badge/Version-0.1.1-0ea5e9?style=flat" alt="Version" />
+  <img src="https://img.shields.io/badge/Profile-1C1G%20friendly-0f766e?style=flat" alt="Profile" />
+  <img src="https://img.shields.io/badge/Status-Release%20Candidate-f97316?style=flat" alt="Status" />
+</p>
 
-## 1. Project Identity
+**Language / 语言**: [English](README.md) | [简体中文](README.zh-CN.md)
 
-OrbitClaw is an independently maintained project built on top of upstream work.
+</div>
 
-- Current brand: **OrbitClaw**
-- Web UI brand: **OrbitClaw Console**
-- Python package namespace: `orbitclaw`
-- CLI command: `orbitclaw`
-- Default runtime home: `~/.orbitclaw`
+---
 
-## 2. Upstream Attribution
+## Why This Exists
 
-This project is based on [HKUDS/nanobot](https://github.com/HKUDS/nanobot) and continues under MIT-compatible terms.
+OrbitClaw is an independently maintained secondary-development runtime built for:
 
-- Upstream project: `HKUDS/nanobot`
-- License: MIT (`LICENSE`)
-- Attribution notice: `NOTICE`
+- Chinese-first daily usage, Telegram-first operations
+- low and predictable resource usage on small hosts
+- clear extension boundaries for channels, MCP, and skills
+- practical WebUI + CLI workflow for deployment and maintenance
 
-## 3. Core Design Rules (Iron Laws)
+## Table of Contents
 
-- Resource law: memory/token/timeout/queue all have explicit budgets.
-- Output law: unified language policy, no internal tool-call leakage, actionable failure replies.
-- Interface law: one message contract; channels map protocol only.
-- Config law: env-first secrets, plaintext minimized, changes rollbackable.
-- Extension law: new channels/MCP/skills should avoid invasive core-loop edits.
-- Evolution law: every release includes upstream patch audit decisions.
-- Quality law: new/changed code must pass tests and incremental lint.
+- [Core Capabilities](#core-capabilities)
+- [Quick Start](#quick-start)
+- [Provider Configuration Example](#provider-configuration-example)
+- [MCP Recommendations](#mcp-recommendations)
+- [Release Workflow (New Repo Main)](#release-workflow-new-repo-main)
+- [Runtime Layout](#runtime-layout)
+- [Development Roadmap (Open)](#development-roadmap-open)
+- [Governance](#governance)
+- [Upstream Attribution](#upstream-attribution)
 
-## 4. Install
+## Core Capabilities
+
+### 1) Bot Runtime (priority)
+
+- unified chat processing loop with command routing
+- unified output post-processing (language + safe output + failure guidance)
+- session and context budget controls (history, memory, background, inline media)
+- queue and timeout limits for predictable behavior under load
+
+### 2) Tools and Skills
+
+- built-in tools for web fetch/search, file operations, shell execution
+- alias mapping (`tools.aliases`) to swap underlying tools without changing prompt habits
+- MCP filters (`mcp_enabled_servers/tools`, `mcp_disabled_servers/tools`) for precise exposure control
+
+### 3) Multi-channel adapters
+
+- Telegram recommended as default channel
+- additional adapters: Discord / Feishu / DingTalk / QQ / Slack / WhatsApp / Email / Mochat
+- adapters map protocol differences; runtime behavior stays in core logic
+
+### 4) Ops and diagnostics
+
+- `orbitclaw status` + `orbitclaw doctor`
+- WebUI for models/APIs, channels, MCP, skills, media
+- Docker deployment with shared runtime directory requirements
+
+## Quick Start
+
+### 1) Install
 
 ```bash
 git clone <your-orbitclaw-repo-url>
@@ -47,90 +77,149 @@ cd orbitclaw
 pip install -e .
 ```
 
-## 5. Quick Start
-
-### 5.1 Bootstrap
+### 2) Bootstrap
 
 ```bash
 orbitclaw onboard
 ```
 
-### 5.2 Configure model endpoint
+### 3) Start gateway
 
-Edit `~/.orbitclaw/config.json`:
+```bash
+orbitclaw gateway
+```
+
+### 4) Start WebUI
+
+```bash
+orbitclaw webui --host 0.0.0.0 --port 18791
+```
+
+WebUI is protected by a path token (no username/password popup).
+
+## Provider Configuration Example
+
+Edit `/Users/<you>/.orbitclaw/config.json`:
 
 ```json
 {
   "providers": {
     "endpoints": {
-      "ohmygpt": {
+      "openai": {
         "type": "openai_compatible",
-        "apiBase": "${OHMYGPT_API_BASE}",
-        "apiKey": "${OHMYGPT_API_KEY}",
-        "models": ["gemini-2.5-flash-lite"]
+        "apiBase": "https://api.openai.com/v1",
+        "apiKey": "${OPENAI_API_KEY}",
+        "models": ["gpt-4o-mini", "gpt-4.1-mini"]
       }
     }
   },
   "agents": {
     "defaults": {
-      "model": "ohmygpt/gemini-2.5-flash-lite",
+      "model": "openai/gpt-4o-mini",
       "temperature": 0.1
     }
   }
 }
 ```
 
-Put secrets in `~/.orbitclaw/.env`:
+Put secrets in `/Users/<you>/.orbitclaw/.env`:
 
 ```bash
-OHMYGPT_API_BASE=https://api.ohmygpt.com/v1
-OHMYGPT_API_KEY=sk-xxx
+OPENAI_API_KEY=sk-xxx
 ```
 
-### 5.3 Run gateway
+## MCP Recommendations
+
+For Chinese MCP discovery and category browsing, use:
+
+- [Awesome-MCP-ZH](https://github.com/yzfly/Awesome-MCP-ZH?tab=readme-ov-file)
+
+Recommended integration style in OrbitClaw:
+
+1. keep runtime lean: install only task-relevant MCP servers
+2. map stable aliases in `tools.aliases` (`doc_read`, `image_read`, `code_search`)
+3. verify with `orbitclaw doctor` after each MCP addition
+4. record resource impact before keeping it enabled by default
+
+Prompt template for adding a new MCP safely:
+
+```text
+Add MCP server "<name>" with minimum required tools only.
+Then add aliases for common tasks and keep all other tools disabled by default.
+Finally, run a health check and report config diff + rollback steps.
+```
+
+## Release Workflow (New Repo Main)
+
+You requested release from a new repository `main` branch, not upstream fork branches.
+
+Recommended flow:
+
+1. daily development on `codex/dev`
+2. release prep in a temporary `codex/release-x.y.z`
+3. merge/squash into new repo `main`
+4. tag on new repo only (`v0.1.1`, `v0.1.2`, ...)
+
+Suggested commands:
 
 ```bash
-orbitclaw gateway
+git remote add product <your-new-repo-url>
+git fetch product
+git checkout -B main
+git merge --squash codex/dev
+git commit -m "release: orbitclaw v0.1.1"
+git push product main --force-with-lease
+git tag v0.1.1
+git push product v0.1.1
 ```
 
-### 5.4 Open Web UI
+## Runtime Layout
 
-```bash
-orbitclaw webui --host 0.0.0.0 --port 18791
+```text
+orbitclaw/
+├── orbitclaw/          # runtime core
+├── assets/             # brand assets
+├── docs/               # product/ops/developer docs
+├── release/            # governance/checklists/audits
+├── scripts/            # quality and release scripts
+└── tests/              # regression tests
 ```
 
-Web UI uses URL path-token access (no password popup).
+Key runtime paths:
 
-## 6. Recommended Runtime Stack
+- `/Users/<you>/.orbitclaw/config.json`
+- `/Users/<you>/.orbitclaw/.env`
+- `/Users/<you>/.orbitclaw/env/`
+- `/Users/<you>/.orbitclaw/workspace`
+- `/Users/<you>/.orbitclaw/mcp`
+- `/Users/<you>/.orbitclaw/skills`
+- `/Users/<you>/.orbitclaw/media`
+- `/Users/<you>/.orbitclaw/exports`
 
-- Primary channel: Telegram
-- Search: Exa MCP (`EXA_API_KEY`)
-- Document parsing: Document Loader MCP
-- Deployment: Docker or systemd
+## Development Roadmap (Open)
 
-## 7. Runtime Directory Layout
+These are intentionally unchecked; mark them only when done.
 
-- Config: `~/.orbitclaw/config.json`
-- Env file: `~/.orbitclaw/.env`
-- Env helper dir: `~/.orbitclaw/env/`
-- Workspace: `~/.orbitclaw/workspace`
-- MCP home: `~/.orbitclaw/mcp`
-- Skills dir: `~/.orbitclaw/skills`
-- Media dir: `~/.orbitclaw/media`
-- Exports dir: `~/.orbitclaw/exports`
+- [ ] Split large modules by testable responsibilities (`cli/commands.py`, `channels/mochat.py`, `channels/feishu.py`)
+- [ ] Keep channels centralized for management while separating protocol mapping from runtime business logic
+- [ ] Improve release engineering flow (`main`-only product release, stronger CI branch/tag gates)
+- [ ] Dependency slimming plan (default minimal install + optional channel extras)
+- [ ] WebUI visual cleanup and interaction polish (after core bot behavior milestones)
+- [ ] Expand MCP recommendation library and one-click install guidance
+- [ ] Continue core-bot reliability passes before new channel features
 
-## 8. Governance and Release Process
+## Governance
 
-- Upstream audit policy: `release/UPSTREAM_PATCH_AUDIT.md`
-- Monthly upstream audit records: `release/upstream-audits/`
-- Incremental quality gate: `release/QUALITY_GATE.md`
+- Engineering rules: `DEVELOPMENT_RULES.md`
+- Security policy: `SECURITY.md`
+- Quality gate: `release/QUALITY_GATE.md`
 - Release checklist: `release/RELEASE_CHECKLIST.md`
+- Upstream audit policy: `release/UPSTREAM_PATCH_AUDIT.md`
+- Monthly audit records: `release/upstream-audits/`
 
-## 9. Branding Assets
+## Upstream Attribution
 
-- Icon: `assets/orbitclaw-icon.svg`
-- Banner: `assets/orbitclaw-banner.svg`
+This project is based on [HKUDS/nanobot](https://github.com/HKUDS/nanobot) and distributed under MIT-compatible terms.
 
-## 10. License
-
-MIT. See `LICENSE` and `NOTICE`.
+- details: `NOTICE`
+- license: `LICENSE`
