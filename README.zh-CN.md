@@ -56,7 +56,7 @@ LunaeClaw 面向的是“要上线、要维护、要排障”的场景，不是�
 
 ```bash
 git clone <your-repo-url>
-cd OrbitClaw
+cd LunaeClaw
 uv sync --extra dev
 uv run lunaeclaw onboard
 uv run lunaeclaw gateway
@@ -73,7 +73,7 @@ sudo apt install -y curl git python3 python3-venv python3-pip
 curl -LsSf https://astral.sh/uv/install.sh | sh
 
 git clone <your-repo-url>
-cd OrbitClaw
+cd LunaeClaw
 uv sync --extra dev
 uv run lunaeclaw onboard
 uv run lunaeclaw gateway
@@ -83,7 +83,7 @@ uv run lunaeclaw gateway
 
 ```bash
 git clone <your-repo-url>
-cd OrbitClaw
+cd LunaeClaw
 mkdir -p ./.lunaeclaw-data
 docker compose up -d --build lunaeclaw-gateway lunaeclaw-webui
 docker compose logs -f --tail=200
@@ -98,7 +98,7 @@ docker compose logs -f --tail=200
 
 ```bash
 git clone <your-repo-url>
-cd OrbitClaw
+cd LunaeClaw
 pip install -e .
 lunaeclaw onboard
 lunaeclaw gateway
@@ -171,7 +171,7 @@ lunaeclaw doctor
 ### 仓库目录
 
 ```text
-OrbitClaw/
+LunaeClaw/
 ├── lunaeclaw/              # 运行时代码（app/core/capabilities/platform/services）
 ├── bridge/                 # WhatsApp Node.js bridge
 ├── tests/public/           # 对外回归测试
