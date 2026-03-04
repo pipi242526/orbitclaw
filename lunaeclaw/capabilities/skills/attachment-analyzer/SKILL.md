@@ -4,7 +4,7 @@ description: Analyze chat attachments (images, PDF, Word, PowerPoint, Excel/CSV/
 category: analysis
 lang: zh,en
 requires_cli: uvx
-metadata: {"orbitclaw":{"emoji":"📎"}}
+metadata: {"lunaeclaw":{"emoji":"📎"}}
 ---
 
 # Attachment Analyzer

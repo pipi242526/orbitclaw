@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from orbitclaw.app.webui.services import safe_positive_int
+from lunaeclaw.app.webui.services import safe_positive_int
 
 _GET_ROUTES: dict[str, str] = {
     "/": "_render_dashboard",

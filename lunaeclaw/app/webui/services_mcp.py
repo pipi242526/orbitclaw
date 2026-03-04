@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from orbitclaw.platform.config.presets import merge_unique as _merge_unique
+from lunaeclaw.platform.config.presets import merge_unique as _merge_unique
 
 
 def is_mcp_server_enabled(cfg: Any, server_name: str) -> bool:

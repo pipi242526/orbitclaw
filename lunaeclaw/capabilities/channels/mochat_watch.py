@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from orbitclaw.capabilities.channels.mochat_helpers import str_field
+from lunaeclaw.capabilities.channels.mochat_helpers import str_field
 
 
 @dataclass

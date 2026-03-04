@@ -16,10 +16,10 @@ from typing import Any
 
 from loguru import logger
 
-from orbitclaw.capabilities.channels.base import BaseChannel
-from orbitclaw.core.bus.events import OutboundMessage
-from orbitclaw.core.bus.queue import MessageBus
-from orbitclaw.platform.config.schema import EmailConfig
+from lunaeclaw.capabilities.channels.base import BaseChannel
+from lunaeclaw.core.bus.events import OutboundMessage
+from lunaeclaw.core.bus.queue import MessageBus
+from lunaeclaw.platform.config.schema import EmailConfig
 
 
 class EmailChannel(BaseChannel):
@@ -122,7 +122,7 @@ class EmailChannel(BaseChannel):
             logger.warning("Email channel missing recipient address")
             return
 
-        base_subject = self._last_subject_by_chat.get(to_addr, "orbitclaw reply")
+        base_subject = self._last_subject_by_chat.get(to_addr, "lunaeclaw reply")
         subject = self._reply_subject(base_subject)
         if msg.metadata and isinstance(msg.metadata.get("subject"), str):
             override = msg.metadata["subject"].strip()
@@ -397,7 +397,7 @@ class EmailChannel(BaseChannel):
         return html.unescape(text)
 
     def _reply_subject(self, base_subject: str) -> str:
-        subject = (base_subject or "").strip() or "orbitclaw reply"
+        subject = (base_subject or "").strip() or "lunaeclaw reply"
         prefix = self.config.subject_prefix or "Re: "
         if subject.lower().startswith("re:"):
             return subject

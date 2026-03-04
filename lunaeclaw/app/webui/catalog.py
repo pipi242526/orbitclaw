@@ -8,8 +8,8 @@ import shutil
 from pathlib import Path
 from typing import Any
 
-from orbitclaw.platform.config.schema import Config, MCPServerConfig
-from orbitclaw.platform.utils.helpers import get_global_skills_path
+from lunaeclaw.platform.config.schema import Config, MCPServerConfig
+from lunaeclaw.platform.utils.helpers import get_global_skills_path
 
 _ENV_PLACEHOLDER_RE = re.compile(r"\$\{([A-Za-z_][A-Za-z0-9_]*)\}")
 
@@ -222,7 +222,7 @@ def evaluate_skill_library_health(
 
 
 def _builtin_skills_root() -> Path:
-    # orbitclaw/app/webui/catalog.py -> orbitclaw/capabilities/skills
+    # lunaeclaw/app/webui/catalog.py -> lunaeclaw/capabilities/skills
     return Path(__file__).resolve().parents[2] / "capabilities" / "skills"
 
 

@@ -19,11 +19,11 @@ from telegram.ext import (
 )
 from telegram.request import HTTPXRequest
 
-from orbitclaw.capabilities.channels.base import BaseChannel
-from orbitclaw.core.bus.events import OutboundMessage
-from orbitclaw.core.bus.queue import MessageBus
-from orbitclaw.platform.config.schema import TelegramConfig
-from orbitclaw.platform.utils.helpers import safe_filename
+from lunaeclaw.capabilities.channels.base import BaseChannel
+from lunaeclaw.core.bus.events import OutboundMessage
+from lunaeclaw.core.bus.queue import MessageBus
+from lunaeclaw.platform.config.schema import TelegramConfig
+from lunaeclaw.platform.utils.helpers import safe_filename
 
 
 def _markdown_to_telegram_html(text: str) -> str:
@@ -431,7 +431,7 @@ class TelegramChannel(BaseChannel):
 
         user = update.effective_user
         await update.message.reply_text(
-            f"👋 Hi {user.first_name}! I'm orbitclaw.\n\n"
+            f"👋 Hi {user.first_name}! I'm lunaeclaw.\n\n"
             "Send me a message and I'll respond!\n"
             "Type /help to see available commands."
         )
@@ -441,7 +441,7 @@ class TelegramChannel(BaseChannel):
         if not update.message:
             return
         await update.message.reply_text(
-            "🐈 orbitclaw commands:\n"
+            "🐈 lunaeclaw commands:\n"
             "/new — Start a new conversation\n"
             "/help — Show available commands"
         )
@@ -521,8 +521,8 @@ class TelegramChannel(BaseChannel):
                 self._get_extension(media_type, mime_type)
                 original_name = getattr(media_file, "file_name", None)
 
-                # Save to centralized orbitclaw media directory
-                from orbitclaw.platform.utils.helpers import get_media_dir
+                # Save to centralized lunaeclaw media directory
+                from lunaeclaw.platform.utils.helpers import get_media_dir
                 media_dir = get_media_dir()
 
                 file_path = self._build_media_path(
@@ -547,7 +547,7 @@ class TelegramChannel(BaseChannel):
 
                 # Handle voice transcription
                 if media_type == "voice" or media_type == "audio":
-                    from orbitclaw.platform.providers.transcription import GroqTranscriptionProvider
+                    from lunaeclaw.platform.providers.transcription import GroqTranscriptionProvider
                     transcriber = GroqTranscriptionProvider(api_key=self.groq_api_key)
                     transcription = await transcriber.transcribe(file_path)
                     if transcription:

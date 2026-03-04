@@ -7,10 +7,10 @@ from typing import Any
 
 from loguru import logger
 
-from orbitclaw.capabilities.channels.base import BaseChannel
-from orbitclaw.core.bus.events import OutboundMessage
-from orbitclaw.core.bus.queue import MessageBus
-from orbitclaw.platform.config.schema import Config
+from lunaeclaw.capabilities.channels.base import BaseChannel
+from lunaeclaw.core.bus.events import OutboundMessage
+from lunaeclaw.core.bus.queue import MessageBus
+from lunaeclaw.platform.config.schema import Config
 
 
 class ChannelManager:
@@ -37,7 +37,7 @@ class ChannelManager:
         # Telegram channel
         if self.config.channels.telegram.enabled:
             try:
-                from orbitclaw.capabilities.channels.telegram import TelegramChannel
+                from lunaeclaw.capabilities.channels.telegram import TelegramChannel
                 self.channels["telegram"] = TelegramChannel(
                     self.config.channels.telegram,
                     self.bus,
@@ -50,7 +50,7 @@ class ChannelManager:
         # WhatsApp channel
         if self.config.channels.whatsapp.enabled:
             try:
-                from orbitclaw.capabilities.channels.whatsapp import WhatsAppChannel
+                from lunaeclaw.capabilities.channels.whatsapp import WhatsAppChannel
                 self.channels["whatsapp"] = WhatsAppChannel(
                     self.config.channels.whatsapp, self.bus
                 )
@@ -61,7 +61,7 @@ class ChannelManager:
         # Discord channel
         if self.config.channels.discord.enabled:
             try:
-                from orbitclaw.capabilities.channels.discord import DiscordChannel
+                from lunaeclaw.capabilities.channels.discord import DiscordChannel
                 self.channels["discord"] = DiscordChannel(
                     self.config.channels.discord, self.bus
                 )
@@ -72,7 +72,7 @@ class ChannelManager:
         # Feishu channel
         if self.config.channels.feishu.enabled:
             try:
-                from orbitclaw.capabilities.channels.feishu import FeishuChannel
+                from lunaeclaw.capabilities.channels.feishu import FeishuChannel
                 self.channels["feishu"] = FeishuChannel(
                     self.config.channels.feishu, self.bus
                 )
@@ -83,7 +83,7 @@ class ChannelManager:
         # Mochat channel
         if self.config.channels.mochat.enabled:
             try:
-                from orbitclaw.capabilities.channels.mochat import MochatChannel
+                from lunaeclaw.capabilities.channels.mochat import MochatChannel
 
                 self.channels["mochat"] = MochatChannel(
                     self.config.channels.mochat, self.bus
@@ -95,7 +95,7 @@ class ChannelManager:
         # DingTalk channel
         if self.config.channels.dingtalk.enabled:
             try:
-                from orbitclaw.capabilities.channels.dingtalk import DingTalkChannel
+                from lunaeclaw.capabilities.channels.dingtalk import DingTalkChannel
                 self.channels["dingtalk"] = DingTalkChannel(
                     self.config.channels.dingtalk, self.bus
                 )
@@ -106,7 +106,7 @@ class ChannelManager:
         # Email channel
         if self.config.channels.email.enabled:
             try:
-                from orbitclaw.capabilities.channels.email import EmailChannel
+                from lunaeclaw.capabilities.channels.email import EmailChannel
                 self.channels["email"] = EmailChannel(
                     self.config.channels.email, self.bus
                 )
@@ -117,7 +117,7 @@ class ChannelManager:
         # Slack channel
         if self.config.channels.slack.enabled:
             try:
-                from orbitclaw.capabilities.channels.slack import SlackChannel
+                from lunaeclaw.capabilities.channels.slack import SlackChannel
                 self.channels["slack"] = SlackChannel(
                     self.config.channels.slack, self.bus
                 )
@@ -128,7 +128,7 @@ class ChannelManager:
         # QQ channel
         if self.config.channels.qq.enabled:
             try:
-                from orbitclaw.capabilities.channels.qq import QQChannel
+                from lunaeclaw.capabilities.channels.qq import QQChannel
                 self.channels["qq"] = QQChannel(
                     self.config.channels.qq,
                     self.bus,

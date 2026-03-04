@@ -11,11 +11,11 @@ from contextlib import nullcontext
 from loguru import logger
 from rich.console import Console
 
-from orbitclaw.app.cli.runtime_wiring import build_agent_loop, make_provider
-from orbitclaw.core.bus.events import InboundMessage
-from orbitclaw.core.bus.queue import MessageBus
-from orbitclaw.platform.config.loader import get_data_dir, load_config
-from orbitclaw.services.cron.service import CronService
+from lunaeclaw.app.cli.runtime_wiring import build_agent_loop, make_provider
+from lunaeclaw.core.bus.events import InboundMessage
+from lunaeclaw.core.bus.queue import MessageBus
+from lunaeclaw.platform.config.loader import get_data_dir, load_config
+from lunaeclaw.services.cron.service import CronService
 
 
 def run_agent_command(
@@ -47,9 +47,9 @@ def run_agent_command(
     cron = CronService(cron_store_path)
 
     if logs:
-        logger.enable("orbitclaw")
+        logger.enable("lunaeclaw")
     else:
-        logger.disable("orbitclaw")
+        logger.disable("lunaeclaw")
 
     agent_loop = build_agent_loop(
         config=config,
@@ -61,7 +61,7 @@ def run_agent_command(
     def thinking_ctx():
         if logs:
             return nullcontext()
-        return console.status("[dim]orbitclaw is thinking...[/dim]", spinner="dots")
+        return console.status("[dim]lunaeclaw is thinking...[/dim]", spinner="dots")
 
     async def cli_progress(content: str) -> None:
         console.print(f"  [dim]↳ {content}[/dim]")

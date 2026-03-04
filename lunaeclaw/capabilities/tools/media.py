@@ -7,8 +7,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from orbitclaw.capabilities.tools.base import Tool
-from orbitclaw.platform.utils.helpers import get_exports_dir, get_media_dir
+from lunaeclaw.capabilities.tools.base import Tool
+from lunaeclaw.platform.utils.helpers import get_exports_dir, get_media_dir
 
 
 def _display_name(name: str) -> str:
@@ -86,10 +86,10 @@ class _BaseFilesTool(Tool):
 
 
 class FilesHubTool(_BaseFilesTool):
-    """List/delete files in orbitclaw managed directories (media/exports)."""
+    """List/delete files in lunaeclaw managed directories (media/exports)."""
 
     name = "files_hub"
-    description = "List or delete files in orbitclaw stores (media attachments, exports)."
+    description = "List or delete files in lunaeclaw stores (media attachments, exports)."
     parameters = {
         "type": "object",
         "properties": {

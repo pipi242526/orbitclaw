@@ -7,14 +7,14 @@ from typing import Any, Callable
 
 import typer
 
-from orbitclaw.platform.config.schema import Config
+from lunaeclaw.platform.config.schema import Config
 
 
 def create_workspace_templates(workspace: Path, *, console: Any) -> None:
     """Create default workspace template files from bundled templates."""
     from importlib.resources import files as pkg_files
 
-    templates_dir = pkg_files("orbitclaw") / "templates"
+    templates_dir = pkg_files("lunaeclaw") / "templates"
     for item in templates_dir.iterdir():
         if item.name == "memory" or not item.name.endswith(".md"):
             continue
@@ -47,8 +47,8 @@ def bootstrap_runtime_for_webui(
     apply_recommended_tool_defaults: Callable[[Config], None],
 ) -> None:
     """Ensure config/workspace/runtime folders exist before starting the Web UI."""
-    from orbitclaw.platform.config.loader import get_config_path, load_config, save_config
-    from orbitclaw.platform.utils.helpers import (
+    from lunaeclaw.platform.config.loader import get_config_path, load_config, save_config
+    from lunaeclaw.platform.utils.helpers import (
         get_env_dir,
         get_env_file,
         get_global_skills_path,
@@ -87,9 +87,9 @@ def onboard_command(
     logo: str,
     apply_recommended_tool_defaults: Callable[[Config], None],
 ) -> None:
-    """Initialize orbitclaw configuration and workspace."""
-    from orbitclaw.platform.config.loader import get_config_path, load_config, save_config
-    from orbitclaw.platform.utils.helpers import (
+    """Initialize lunaeclaw configuration and workspace."""
+    from lunaeclaw.platform.config.loader import get_config_path, load_config, save_config
+    from lunaeclaw.platform.utils.helpers import (
         get_env_dir,
         get_env_file,
         get_global_skills_path,
@@ -131,15 +131,15 @@ def onboard_command(
 
     create_workspace_templates(workspace, console=console)
 
-    console.print(f"\n{logo} orbitclaw is ready!")
+    console.print(f"\n{logo} lunaeclaw is ready!")
     console.print("\nNext steps:")
-    console.print("  1. Add your API key to [cyan]~/.orbitclaw/config.json[/cyan]")
+    console.print("  1. Add your API key to [cyan]~/.lunaeclaw/config.json[/cyan]")
     console.print("     Get one at: https://openrouter.ai/keys")
-    console.print("  2. (Recommended) Put secrets in [cyan]~/.orbitclaw/.env[/cyan] or [cyan]~/.orbitclaw/env/*.env[/cyan]")
+    console.print("  2. (Recommended) Put secrets in [cyan]~/.lunaeclaw/.env[/cyan] or [cyan]~/.lunaeclaw/env/*.env[/cyan]")
     console.print("     Use ${ENV_VAR} placeholders in config.json (apiBase/apiKey/etc.)")
     console.print("  3. Optional: install [cyan]uv[/cyan] to enable document parser MCP ([cyan]uvx[/cyan])")
     console.print("     Example: [cyan]brew install uv[/cyan]")
-    console.print("  4. Chat: [cyan]orbitclaw agent -m \"Hello!\"[/cyan]")
-    console.print("\n[dim]Runtime folders: ~/.orbitclaw/config.json, ~/.orbitclaw/.env, ~/.orbitclaw/env/, ~/.orbitclaw/mcp/, ~/.orbitclaw/skills/[/dim]")
+    console.print("  4. Chat: [cyan]lunaeclaw agent -m \"Hello!\"[/cyan]")
+    console.print("\n[dim]Runtime folders: ~/.lunaeclaw/config.json, ~/.lunaeclaw/.env, ~/.lunaeclaw/env/, ~/.lunaeclaw/mcp/, ~/.lunaeclaw/skills/[/dim]")
     console.print("[dim]Default config now includes Exa MCP search and a docloader MCP template.[/dim]")
     console.print("[dim]Want Telegram/WhatsApp? See: README channel setup sections in this repo[/dim]")

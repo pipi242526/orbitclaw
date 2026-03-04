@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from orbitclaw.app.webui.common import (
+from lunaeclaw.app.webui.common import (
     _CHANNEL_QUICK_SPECS,
     _set_nested_attr,
 )

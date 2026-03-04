@@ -3,13 +3,13 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from orbitclaw.capabilities.tools.registry import ToolRegistry
-from orbitclaw.core.agent.loop import AgentLoop
-from orbitclaw.core.agent.toolset_builder import ToolsetBuilder
-from orbitclaw.core.bus.queue import MessageBus
-from orbitclaw.core.context.context import ContextBuilder
-from orbitclaw.core.policy.policy_pipeline import PolicyPipeline
-from orbitclaw.platform.providers.base import LLMResponse
+from lunaeclaw.capabilities.tools.registry import ToolRegistry
+from lunaeclaw.core.agent.loop import AgentLoop
+from lunaeclaw.core.agent.toolset_builder import ToolsetBuilder
+from lunaeclaw.core.bus.queue import MessageBus
+from lunaeclaw.core.context.context import ContextBuilder
+from lunaeclaw.core.policy.policy_pipeline import PolicyPipeline
+from lunaeclaw.platform.providers.base import LLMResponse
 
 
 def test_detect_reply_language_prefers_chinese_for_cjk_text():
@@ -126,7 +126,7 @@ def test_compact_background_text_uses_structural_summary(tmp_path: Path):
 def test_detect_runtime_environment_supports_explicit_override():
     kind, hint = ContextBuilder._detect_runtime_environment(override="docker")
     assert kind == "docker"
-    assert "ORBITCLAW_RUNTIME_KIND" in hint
+    assert "LUNAECLAW_RUNTIME_KIND" in hint
 
 
 def test_detect_runtime_environment_detects_kubernetes_marker():

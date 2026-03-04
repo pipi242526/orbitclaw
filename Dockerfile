@@ -1,40 +1,45 @@
 FROM ghcr.io/astral-sh/uv:python3.12-bookworm-slim
 
-# Install Node.js 20 for the WhatsApp bridge
-RUN apt-get update && \
-    apt-get install -y --no-install-recommends curl ca-certificates gnupg git && \
-    mkdir -p /etc/apt/keyrings && \
-    curl -fsSL https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.key | gpg --dearmor -o /etc/apt/keyrings/nodesource.gpg && \
-    echo "deb [signed-by=/etc/apt/keyrings/nodesource.gpg] https://deb.nodesource.com/node_20.x nodistro main" > /etc/apt/sources.list.d/nodesource.list && \
-    apt-get update && \
-    apt-get install -y --no-install-recommends nodejs && \
-    apt-get purge -y gnupg && \
-    apt-get autoremove -y && \
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    UV_SYSTEM_PYTHON=1 \
+    PIP_NO_CACHE_DIR=1
+
+# Runtime deps: Node.js 20 (for WhatsApp bridge), git/curl/certs.
+RUN set -eux; \
+    apt-get update; \
+    apt-get install -y --no-install-recommends ca-certificates curl git gnupg; \
+    mkdir -p /etc/apt/keyrings; \
+    curl -fsSL https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.key \
+      | gpg --dearmor -o /etc/apt/keyrings/nodesource.gpg; \
+    echo "deb [signed-by=/etc/apt/keyrings/nodesource.gpg] https://deb.nodesource.com/node_20.x nodistro main" \
+      > /etc/apt/sources.list.d/nodesource.list; \
+    apt-get update; \
+    apt-get install -y --no-install-recommends nodejs; \
+    apt-get purge -y --auto-remove gnupg; \
     rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
-# Install Python dependencies first (cached layer)
-COPY pyproject.toml README.md LICENSE ./
-RUN mkdir -p orbitclaw bridge && touch orbitclaw/__init__.py && \
-    uv pip install --system --no-cache . && \
-    rm -rf orbitclaw bridge
+# Cache Python dependencies separately from source changes.
+COPY pyproject.toml README.md README.zh-CN.md LICENSE NOTICE ./
+RUN mkdir -p lunaeclaw bridge; \
+    touch lunaeclaw/__init__.py; \
+    uv pip install --system --no-cache .; \
+    rm -rf lunaeclaw bridge
 
-# Copy the full source and install
-COPY orbitclaw/ orbitclaw/
+# Copy full project and install runtime package.
+COPY lunaeclaw/ lunaeclaw/
 COPY bridge/ bridge/
 RUN uv pip install --system --no-cache .
 
-# Build the WhatsApp bridge
-WORKDIR /app/bridge
-RUN npm install && npm run build
-WORKDIR /app
+# Validate bridge build during image build (keeps runtime predictable).
+RUN npm --prefix bridge install && npm --prefix bridge run build && npm cache clean --force
 
-# Create config directory
-RUN mkdir -p /root/.orbitclaw
+# Persistent runtime directory.
+RUN mkdir -p /root/.lunaeclaw
 
-# Gateway default port
-EXPOSE 18790
+EXPOSE 18790 18791
 
-ENTRYPOINT ["orbitclaw"]
+ENTRYPOINT ["lunaeclaw"]
 CMD ["status"]

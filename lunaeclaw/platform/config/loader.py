@@ -6,18 +6,18 @@ import re
 from copy import deepcopy
 from pathlib import Path
 
-from orbitclaw.platform.config.schema import Config
+from lunaeclaw.platform.config.schema import Config
 
 
 def get_config_path() -> Path:
     """Get the default configuration file path."""
-    from orbitclaw.platform.utils.helpers import get_config_file
+    from lunaeclaw.platform.utils.helpers import get_config_file
     return get_config_file()
 
 
 def get_data_dir() -> Path:
-    """Get the orbitclaw data directory."""
-    from orbitclaw.platform.utils.helpers import get_data_path
+    """Get the lunaeclaw data directory."""
+    from lunaeclaw.platform.utils.helpers import get_data_path
     return get_data_path()
 
 
@@ -303,7 +303,7 @@ _ENV_VAR_PATTERN = re.compile(r"\$\{([A-Za-z_][A-Za-z0-9_]*)(?::-(.*?))?\}")
 def _discover_env_files() -> list[Path]:
     """Find optional env files for secrets/API keys."""
     files: list[Path] = []
-    explicit = os.environ.get("ORBITCLAW_ENV_FILES", "").strip()
+    explicit = os.environ.get("LUNAECLAW_ENV_FILES", "").strip()
     if explicit:
         for raw in explicit.split(os.pathsep):
             p = Path(raw).expanduser()
@@ -311,7 +311,7 @@ def _discover_env_files() -> list[Path]:
                 files.append(p)
         return files
 
-    from orbitclaw.platform.utils.helpers import get_env_dir, get_env_file
+    from lunaeclaw.platform.utils.helpers import get_env_dir, get_env_file
     primary = get_env_file()
     if primary.exists() and primary.is_file():
         files.append(primary)
@@ -336,7 +336,7 @@ def _parse_env_line(line: str) -> tuple[str, str] | None:
 
 
 def _load_env_files() -> None:
-    """Load env vars from ~/.orbitclaw/.env and ~/.orbitclaw/env/*.env without overriding existing vars."""
+    """Load env vars from ~/.lunaeclaw/.env and ~/.lunaeclaw/env/*.env without overriding existing vars."""
     for path in _discover_env_files():
         try:
             for raw_line in path.read_text(encoding="utf-8").splitlines():

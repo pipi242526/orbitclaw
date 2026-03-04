@@ -1,7 +1,7 @@
 {
-  "name": "orbitclaw-whatsapp-bridge",
+  "name": "lunaeclaw-whatsapp-bridge",
   "version": "0.1.0",
-  "description": "WhatsApp bridge for orbitclaw using Baileys",
+  "description": "WhatsApp bridge for lunaeclaw using Baileys",
   "type": "module",
   "main": "dist/index.js",
   "scripts": {

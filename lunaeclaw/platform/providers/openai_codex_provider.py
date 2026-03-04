@@ -11,10 +11,10 @@ import httpx
 from loguru import logger
 from oauth_cli_kit import get_token as get_codex_token
 
-from orbitclaw.platform.providers.base import LLMProvider, LLMResponse, ToolCallRequest
+from lunaeclaw.platform.providers.base import LLMProvider, LLMResponse, ToolCallRequest
 
 DEFAULT_CODEX_URL = "https://chatgpt.com/backend-api/codex/responses"
-DEFAULT_ORIGINATOR = "orbitclaw"
+DEFAULT_ORIGINATOR = "lunaeclaw"
 
 
 class OpenAICodexProvider(LLMProvider):
@@ -91,7 +91,7 @@ def _build_headers(account_id: str, token: str) -> dict[str, str]:
         "chatgpt-account-id": account_id,
         "OpenAI-Beta": "responses=experimental",
         "originator": DEFAULT_ORIGINATOR,
-        "User-Agent": "orbitclaw (python)",
+        "User-Agent": "lunaeclaw (python)",
         "accept": "text/event-stream",
         "content-type": "application/json",
     }

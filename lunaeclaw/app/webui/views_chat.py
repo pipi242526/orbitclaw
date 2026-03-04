@@ -6,8 +6,8 @@ import re
 from html import escape
 from typing import Any
 
-from orbitclaw.app.webui.icons import icon_svg
-from orbitclaw.services.session.manager import SessionManager
+from lunaeclaw.app.webui.icons import icon_svg
+from lunaeclaw.services.session.manager import SessionManager
 
 
 def _normalize_session_id(raw: str) -> str:
@@ -154,7 +154,7 @@ def render_chat(handler: Any, *, msg: str = "", err: str = "", session_id: str =
     <input type="hidden" name="session_id" value="{escape(sid)}">
     <div class="field">
       <label>{"消息" if zh else "Message"}</label>
-      <textarea name="message" placeholder="{'直接在这里和 OrbitClaw 对话。' if zh else 'Chat with OrbitClaw directly in this page.'}"></textarea>
+      <textarea name="message" placeholder="{'直接在这里和 LunaeClaw 对话。' if zh else 'Chat with LunaeClaw directly in this page.'}"></textarea>
     </div>
     <div class="row"><button class="btn primary icon-btn" type="submit">{icon_send}{"发送" if zh else "Send"}</button></div>
   </form>

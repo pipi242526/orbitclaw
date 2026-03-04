@@ -4,16 +4,16 @@ from __future__ import annotations
 
 from typing import Any
 
-from orbitclaw.app.webui.catalog import find_mcp_library_entry
-from orbitclaw.app.webui.common import _fetch_public_json, _parse_csv, _safe_json_object
-from orbitclaw.app.webui.i18n import ui_copy as _ui_copy
-from orbitclaw.app.webui.services_mcp import (
+from lunaeclaw.app.webui.catalog import find_mcp_library_entry
+from lunaeclaw.app.webui.common import _fetch_public_json, _parse_csv, _safe_json_object
+from lunaeclaw.app.webui.i18n import ui_copy as _ui_copy
+from lunaeclaw.app.webui.services_mcp import (
     install_mcp_server,
     is_mcp_server_enabled,
     remove_mcp_server,
     set_mcp_server_enabled,
 )
-from orbitclaw.platform.config.schema import MCPServerConfig, ToolsConfig
+from lunaeclaw.platform.config.schema import MCPServerConfig, ToolsConfig
 
 
 def handle_post_mcp(handler: Any, form: dict[str, list[str]]) -> None:

@@ -11,42 +11,42 @@ from html import escape
 from pathlib import Path
 from typing import Any, Callable
 
-from orbitclaw.app.webui.common import (
+from lunaeclaw.app.webui.common import (
     _CHANNEL_QUICK_SPECS,
     _check_default_model_ref,
     _list_media_rows,
     _list_store_rows,
 )
-from orbitclaw.app.webui.diagnostics import collect_config_migration_hints
-from orbitclaw.app.webui.i18n import ui_copy as _ui_copy
-from orbitclaw.app.webui.i18n import ui_term as _ui_term
-from orbitclaw.app.webui.icons import icon_svg
-from orbitclaw.app.webui.services import record_runtime_trend_sample
-from orbitclaw.app.webui.views_channels import render_channels as _render_channels_page
-from orbitclaw.app.webui.views_chat import render_chat as _render_chat_page
-from orbitclaw.app.webui.views_endpoints import render_endpoints as _render_endpoints_page
-from orbitclaw.app.webui.views_mcp import render_mcp as _render_mcp_page
-from orbitclaw.app.webui.views_media import render_media as _render_media_page
-from orbitclaw.app.webui.views_skills import render_skills as _render_skills_page
-from orbitclaw.core.context.context import ContextBuilder
-from orbitclaw.platform.config.loader import load_config
-from orbitclaw.platform.config.schema import Config
-from orbitclaw.platform.utils.budget import (
+from lunaeclaw.app.webui.diagnostics import collect_config_migration_hints
+from lunaeclaw.app.webui.i18n import ui_copy as _ui_copy
+from lunaeclaw.app.webui.i18n import ui_term as _ui_term
+from lunaeclaw.app.webui.icons import icon_svg
+from lunaeclaw.app.webui.services import record_runtime_trend_sample
+from lunaeclaw.app.webui.views_channels import render_channels as _render_channels_page
+from lunaeclaw.app.webui.views_chat import render_chat as _render_chat_page
+from lunaeclaw.app.webui.views_endpoints import render_endpoints as _render_endpoints_page
+from lunaeclaw.app.webui.views_mcp import render_mcp as _render_mcp_page
+from lunaeclaw.app.webui.views_media import render_media as _render_media_page
+from lunaeclaw.app.webui.views_skills import render_skills as _render_skills_page
+from lunaeclaw.core.context.context import ContextBuilder
+from lunaeclaw.platform.config.loader import load_config
+from lunaeclaw.platform.config.schema import Config
+from lunaeclaw.platform.utils.budget import (
     collect_runtime_budget_alerts,
 )
-from orbitclaw.platform.utils.budget import (
+from lunaeclaw.platform.utils.budget import (
     estimate_tokens_from_chars as _estimate_tokens_from_chars,
 )
-from orbitclaw.platform.utils.budget import (
+from lunaeclaw.platform.utils.budget import (
     read_host_resource_snapshot as _read_host_resource_snapshot,
 )
-from orbitclaw.platform.utils.helpers import (
+from lunaeclaw.platform.utils.helpers import (
     get_env_dir,
     get_env_file,
     get_exports_dir,
     get_global_skills_path,
 )
-from orbitclaw.services.session.manager import SessionManager
+from lunaeclaw.services.session.manager import SessionManager
 
 GatewayRuntimeFn = Callable[[], tuple[bool, str, str]]
 ChannelIssuesFn = Callable[[Config, Config, str], list[str]]
@@ -115,6 +115,9 @@ def render_dashboard(
     budget_alerts = collect_runtime_budget_alerts(cfg_resolved, snapshot)
     penalty = (len(issues) * 15) + sum(18 if a.get("severity") == "error" else 8 for a in budget_alerts)
     health_score = max(0, 100 - penalty)
+    # Hard gate: if core gateway runtime is not ready, system is fundamentally unhealthy.
+    if not gateway_runtime_ready:
+        health_score = min(health_score, 15)
     ready_channel_count = max(0, len(enabled_channels) - len({x.split(":", 1)[0] for x in channel_issues}))
     load1 = snapshot.get("load1")
     cpu_cores = snapshot.get("cpu_cores")
@@ -150,7 +153,7 @@ def render_dashboard(
         elif item.startswith("config:"):
             action_rows.append(_action_row(item, "/", t("review config migration hints and resave related page", "查看配置迁移提示后到对应页面重存")))
         elif item.startswith("gateway runtime:"):
-            action_rows.append(_action_row(item, "/", t("ensure gateway uses same ORBITCLAW_DATA_DIR and is running", "确保 gateway 使用相同 ORBITCLAW_DATA_DIR 并处于运行中")))
+            action_rows.append(_action_row(item, "/", t("ensure gateway uses same LUNAECLAW_DATA_DIR and is running", "确保 gateway 使用相同 LUNAECLAW_DATA_DIR 并处于运行中")))
         else:
             action_rows.append(_action_row(item, "/channels", t("fix in Channels page", "去渠道页面修复")))
     for alert in budget_alerts[:4]:
@@ -240,7 +243,9 @@ def render_dashboard(
     memory_ratio = (memory_used_chars / memory_chars * 100.0) if memory_chars > 0 else 0.0
     background_ratio = (background_used_chars / background_chars * 100.0) if background_chars > 0 else 0.0
     risk_count = len(issues) + len(budget_alerts)
-    if health_score >= 85:
+    if not gateway_runtime_ready:
+        health_state_en, health_state_zh, health_tone = "Core Offline", "主程序未启动", "risk"
+    elif health_score >= 85:
         health_state_en, health_state_zh, health_tone = "Excellent", "优秀", "good"
     elif health_score >= 70:
         health_state_en, health_state_zh, health_tone = "Stable", "稳定", "good"
@@ -315,7 +320,7 @@ def render_dashboard(
   .health-state.risk {{ border-color: color-mix(in srgb, var(--err) 52%, var(--line)); color: color-mix(in srgb, var(--err) 76%, #732d2d 24%); }}
   .health-kpis {{
     display:grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     gap:7px;
     margin-top: 2px;
   }}
@@ -347,9 +352,33 @@ def render_dashboard(
     border-radius: 10px;
     padding: 8px 9px;
     background: color-mix(in srgb, var(--subtle-bg) 84%, transparent);
+    min-height: 88px;
+    display: grid;
+    align-content: center;
   }}
   .mini-kpi .v {{ font-size: 20px; font-weight: 760; line-height:1.04; }}
   .mini-kpi .l {{ font-size: 11px; color: var(--muted); margin-top:3px; }}
+  .health-ambient {{
+    margin-top: 8px;
+    display: grid;
+    grid-template-columns: repeat(12, minmax(0, 1fr));
+    gap: 6px;
+    opacity: .8;
+  }}
+  .health-ambient > span {{
+    height: 6px;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--meter-teal-a) 42%, var(--subtle-bg));
+    border: 1px solid color-mix(in srgb, var(--line) 62%, transparent);
+  }}
+  .health-ambient > span:nth-child(3n) {{
+    background: color-mix(in srgb, var(--meter-ink-a) 40%, var(--subtle-bg));
+    opacity: .75;
+  }}
+  .health-ambient > span:nth-child(4n) {{
+    background: color-mix(in srgb, var(--meter-orange-a) 35%, var(--subtle-bg));
+    opacity: .7;
+  }}
   .side-stack {{ display:grid; gap:7px; }}
   .side-stat {{
     border:1px solid color-mix(in srgb, var(--line) 78%, #fff 22%);
@@ -401,6 +430,9 @@ def render_dashboard(
     border-color: color-mix(in srgb, var(--line) 92%, #fff 8%);
     box-shadow: inset 0 1px 0 rgba(255,255,255,.12), 0 20px 40px rgba(2, 8, 20, .66);
   }}
+  html[data-theme="dark"] .health-ambient > span {{
+    border-color: color-mix(in srgb, var(--line) 86%, transparent);
+  }}
   html[data-theme="dark"] .health-score {{
     color: color-mix(in srgb, var(--ink) 94%, #fff 6%);
     text-shadow: 0 0 14px color-mix(in srgb, var(--accent) 42%, transparent);
@@ -421,6 +453,9 @@ def render_dashboard(
     html[data-theme="auto"] .meter-badge,
     html[data-theme="auto"] .summary-pill {{
       border-color: color-mix(in srgb, var(--line) 92%, #fff 8%);
+    }}
+    html[data-theme="auto"] .health-ambient > span {{
+      border-color: color-mix(in srgb, var(--line) 86%, transparent);
     }}
   }}
   .meter-track {{
@@ -524,6 +559,8 @@ def render_dashboard(
     .health-headline {{ align-items:center; }}
     .health-score {{ font-size: 36px; }}
     .health-kpis {{ grid-template-columns: repeat(2, minmax(0, 1fr)); }}
+    .mini-kpi {{ min-height: 76px; }}
+    .health-ambient {{ grid-template-columns: repeat(8, minmax(0, 1fr)); gap: 5px; }}
     .quick-grid {{ grid-template-columns: 1fr; }}
   }}
 </style>
@@ -554,6 +591,10 @@ def render_dashboard(
         <div class="v">{risk_count}</div>
         <div class="l">{t("Risk Items", "风险项")}</div>
       </div>
+    </div>
+    <div class="health-ambient" aria-hidden="true">
+      <span></span><span></span><span></span><span></span><span></span><span></span>
+      <span></span><span></span><span></span><span></span><span></span><span></span>
     </div>
   </section>
   <section class="card">

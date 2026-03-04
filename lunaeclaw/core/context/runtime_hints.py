@@ -16,8 +16,8 @@ def detect_runtime_environment(
     dockerenv_exists: bool | None = None,
     cgroup_text: str | None = None,
 ) -> tuple[str, str]:
-    """Detect whether orbitclaw runs in host or container-like environment."""
-    forced = (override if override is not None else os.getenv("ORBITCLAW_RUNTIME_KIND", "")).strip().lower()
+    """Detect whether lunaeclaw runs in host or container-like environment."""
+    forced = (override if override is not None else os.getenv("LUNAECLAW_RUNTIME_KIND", "")).strip().lower()
     forced_aliases = {
         "local": "host",
         "host": "host",
@@ -28,7 +28,7 @@ def detect_runtime_environment(
     }
     if forced in forced_aliases:
         normalized = forced_aliases[forced]
-        return normalized, f"forced by ORBITCLAW_RUNTIME_KIND={forced}"
+        return normalized, f"forced by LUNAECLAW_RUNTIME_KIND={forced}"
 
     if dockerenv_exists is None:
         dockerenv_exists = Path("/.dockerenv").exists()

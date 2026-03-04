@@ -13,16 +13,16 @@ from typing import Any
 
 
 def run_status(console: Any, logo: str) -> None:
-    """Show orbitclaw status."""
-    from orbitclaw.capabilities.tools.web import has_exa_search_mcp
-    from orbitclaw.core.context.skills import SkillsLoader
-    from orbitclaw.platform.config.loader import _discover_env_files, get_config_path, load_config
-    from orbitclaw.platform.utils.budget import (
+    """Show lunaeclaw status."""
+    from lunaeclaw.capabilities.tools.web import has_exa_search_mcp
+    from lunaeclaw.core.context.skills import SkillsLoader
+    from lunaeclaw.platform.config.loader import _discover_env_files, get_config_path, load_config
+    from lunaeclaw.platform.utils.budget import (
         collect_runtime_budget_alerts,
         estimate_tokens_from_chars,
         read_host_resource_snapshot,
     )
-    from orbitclaw.platform.utils.helpers import (
+    from lunaeclaw.platform.utils.helpers import (
         get_env_dir,
         get_env_file,
         get_exports_dir,
@@ -34,7 +34,7 @@ def run_status(console: Any, logo: str) -> None:
     config = load_config()
     workspace = config.workspace_path
 
-    console.print(f"{logo} orbitclaw Status\n")
+    console.print(f"{logo} lunaeclaw Status\n")
 
     console.print(f"Config: {config_path} {'[green]✓[/green]' if config_path.exists() else '[red]✗[/red]'}")
     console.print(f"Workspace: {workspace} {'[green]✓[/green]' if workspace.exists() else '[red]✗[/red]'}")
@@ -49,7 +49,7 @@ def run_status(console: Any, logo: str) -> None:
     if not config_path.exists():
         return
 
-    from orbitclaw.platform.providers.registry import PROVIDERS
+    from lunaeclaw.platform.providers.registry import PROVIDERS
 
     console.print(f"Model: {config.agents.defaults.model}")
 
@@ -308,17 +308,17 @@ def run_status(console: Any, logo: str) -> None:
 
 def run_doctor(console: Any, logo: str) -> None:
     """Diagnose configuration/tooling issues and suggest fixes."""
-    from orbitclaw.core.context.skills import SkillsLoader
-    from orbitclaw.platform.config.loader import _discover_env_files, get_config_path, load_config
-    from orbitclaw.platform.config.migration_checker import collect_config_migration_findings
-    from orbitclaw.platform.providers.endpoint_validator import (
+    from lunaeclaw.core.context.skills import SkillsLoader
+    from lunaeclaw.platform.config.loader import _discover_env_files, get_config_path, load_config
+    from lunaeclaw.platform.config.migration_checker import collect_config_migration_findings
+    from lunaeclaw.platform.providers.endpoint_validator import (
         collect_default_model_endpoint_findings,
     )
-    from orbitclaw.platform.utils.budget import (
+    from lunaeclaw.platform.utils.budget import (
         collect_runtime_budget_alerts,
         read_host_resource_snapshot,
     )
-    from orbitclaw.platform.utils.helpers import (
+    from lunaeclaw.platform.utils.helpers import (
         get_env_dir,
         get_env_file,
         get_exports_dir,
@@ -330,7 +330,7 @@ def run_doctor(console: Any, logo: str) -> None:
     config = load_config()
     workspace = config.workspace_path
 
-    console.print(f"{logo} orbitclaw Doctor\n")
+    console.print(f"{logo} lunaeclaw Doctor\n")
     console.print("[bold]Summary[/bold]")
     console.print(f"- Config path: {config_path} ({'exists' if config_path.exists() else 'missing'})")
     console.print(f"- Workspace: {workspace} ({'exists' if workspace.exists() else 'missing'})")
@@ -400,13 +400,13 @@ def run_doctor(console: Any, logo: str) -> None:
             findings.append((
                 "warn",
                 "Exa MCP is configured without exaApiKey in URL",
-                "Use .../mcp?...&exaApiKey=${EXA_API_KEY} and set EXA_API_KEY in ~/.orbitclaw/.env or ~/.orbitclaw/env/*.env.",
+                "Use .../mcp?...&exaApiKey=${EXA_API_KEY} and set EXA_API_KEY in ~/.lunaeclaw/.env or ~/.lunaeclaw/env/*.env.",
             ))
         elif not os.getenv("EXA_API_KEY"):
             findings.append((
                 "warn",
                 "EXA_API_KEY is not set in environment files",
-                "Set EXA_API_KEY in ~/.orbitclaw/.env (or env/*.env) so Exa MCP can authenticate reliably.",
+                "Set EXA_API_KEY in ~/.lunaeclaw/.env (or env/*.env) so Exa MCP can authenticate reliably.",
             ))
 
     ccfg = config.tools.claude_code
@@ -474,13 +474,13 @@ def run_doctor(console: Any, logo: str) -> None:
             findings.append((
                 "warn",
                 "default model uses custom/* but providers.custom.apiKey is empty (or env placeholder not resolved)",
-                "Set providers.custom.apiKey or use ${ENV_VAR} with a helper env file under ~/.orbitclaw/.env or ~/.orbitclaw/env/*.env.",
+                "Set providers.custom.apiKey or use ${ENV_VAR} with a helper env file under ~/.lunaeclaw/.env or ~/.lunaeclaw/env/*.env.",
             ))
         elif "${" in str(config.providers.custom.api_key):
             findings.append((
                 "warn",
                 "providers.custom.apiKey still contains an unresolved ${ENV_VAR} placeholder",
-                "Check ~/.orbitclaw/.env or ~/.orbitclaw/env/*.env and ensure the referenced variable name exists.",
+                "Check ~/.lunaeclaw/.env or ~/.lunaeclaw/env/*.env and ensure the referenced variable name exists.",
             ))
         if config.providers.custom.api_base and "${" in str(config.providers.custom.api_base):
             findings.append((
@@ -520,6 +520,6 @@ def run_doctor(console: Any, logo: str) -> None:
             console.print(f"  Fix: {fix}")
 
     console.print("\n[bold]Recommended next actions[/bold]")
-    console.print("1. Run `orbitclaw onboard` to refresh config and workspace templates with current defaults.")
+    console.print("1. Run `lunaeclaw onboard` to refresh config and workspace templates with current defaults.")
     console.print("2. Keep `profiles.active=cn_dev` for lightweight local use; switch to `research` when you need more tools.")
     console.print("3. Test attachments with `doc_read` / `image_read` after enabling docloader MCP.")

@@ -6,7 +6,7 @@ WebUI one-click setup to keep behavior consistent.
 
 from __future__ import annotations
 
-from orbitclaw.platform.config.schema import Config, MCPServerConfig, ProfileOverridesConfig
+from lunaeclaw.platform.config.schema import Config, MCPServerConfig, ProfileOverridesConfig
 
 
 def merge_unique(items: list[str] | None, additions: list[str] | None) -> list[str]:

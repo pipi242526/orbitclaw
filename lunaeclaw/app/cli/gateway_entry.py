@@ -7,7 +7,7 @@ import os
 import time
 from typing import Any, Callable
 
-from orbitclaw.app.cli.runtime_wiring import (
+from lunaeclaw.app.cli.runtime_wiring import (
     GatewayRuntimeState,
     gateway_reload_poll_seconds,
     print_gateway_runtime_summary,
@@ -15,12 +15,12 @@ from orbitclaw.app.cli.runtime_wiring import (
     stop_gateway_runtime,
     task_exit_reason,
 )
-from orbitclaw.platform.config.schema import Config
+from lunaeclaw.platform.config.schema import Config
 
 
 def gateway_state_heartbeat_seconds() -> float:
     """Heartbeat interval for writing `running` gateway state file updates."""
-    raw = (os.environ.get("ORBITCLAW_GATEWAY_STATE_HEARTBEAT_SECONDS") or "4.0").strip()
+    raw = (os.environ.get("LUNAECLAW_GATEWAY_STATE_HEARTBEAT_SECONDS") or "4.0").strip()
     try:
         value = float(raw)
     except ValueError:
@@ -36,15 +36,15 @@ def gateway_command(
     logo: str,
     ensure_runtime_dependencies: Callable[[Config], None],
 ) -> None:
-    """Start the orbitclaw gateway."""
+    """Start the lunaeclaw gateway."""
     from loguru import logger
 
-    from orbitclaw.app.gateway.control import (
+    from lunaeclaw.app.gateway.control import (
         compute_runtime_config_fingerprint,
         get_gateway_runtime_state_path,
         write_gateway_runtime_state,
     )
-    from orbitclaw.platform.config.loader import (
+    from lunaeclaw.platform.config.loader import (
         get_config_path,
         get_data_dir,
         load_config,
@@ -56,7 +56,7 @@ def gateway_command(
 
         logging.basicConfig(level=logging.DEBUG)
 
-    console.print(f"{logo} Starting orbitclaw gateway on port {port}...")
+    console.print(f"{logo} Starting lunaeclaw gateway on port {port}...")
 
     config_path = get_config_path()
     data_dir = get_data_dir()
@@ -84,20 +84,58 @@ def gateway_command(
             if status == "running":
                 last_running_write = time.monotonic()
 
-        try:
+        async def _start_runtime(config: Config, *, note: str) -> GatewayRuntimeState | None:
+            nonlocal fingerprint, failed_fingerprint
+            try:
+                ensure_runtime_dependencies(config)
+                next_state = await start_gateway_runtime(config, data_dir=data_dir)
+                print_gateway_runtime_summary(next_state, console=console)
+                fingerprint = compute_runtime_config_fingerprint(config_path)
+                failed_fingerprint = None
+                _write_state(status="running", note=note)
+                return next_state
+            except Exception as exc:
+                fingerprint = compute_runtime_config_fingerprint(config_path)
+                failed_fingerprint = fingerprint
+                reason = str(exc).strip() or exc.__class__.__name__
+                logger.warning("Gateway runtime waiting for valid config/dependencies: {}", reason)
+                console.print(f"[yellow]Gateway waiting for valid config[/yellow]: {reason}")
+                _write_state(status="waiting_config", note=reason)
+                return None
+
+        def _load_config_snapshot() -> Config:
             if config_path.exists():
-                config = load_config_strict(config_path, apply_profiles=True, resolve_env=True)
+                return load_config_strict(config_path, apply_profiles=True, resolve_env=True)
+            return load_config(config_path, apply_profiles=True, resolve_env=True)
+
+        try:
+            try:
+                config = _load_config_snapshot()
+            except Exception as exc:
+                fingerprint = compute_runtime_config_fingerprint(config_path)
+                failed_fingerprint = fingerprint
+                reason = str(exc).strip() or exc.__class__.__name__
+                logger.warning("Gateway config snapshot invalid: {}", reason)
+                console.print(f"[yellow]Gateway waiting for valid config[/yellow]: {reason}")
+                _write_state(status="waiting_config", note=reason)
             else:
-                config = load_config(config_path, apply_profiles=True, resolve_env=True)
-            ensure_runtime_dependencies(config)
-            state = await start_gateway_runtime(config, data_dir=data_dir)
-            print_gateway_runtime_summary(state, console=console)
-            fingerprint = compute_runtime_config_fingerprint(config_path)
-            _write_state(status="running", note="gateway started")
+                state = await _start_runtime(config, note="gateway started")
             while True:
                 await asyncio.sleep(poll_seconds)
 
                 if state is None:
+                    next_fingerprint = compute_runtime_config_fingerprint(config_path)
+                    if next_fingerprint == failed_fingerprint:
+                        continue
+                    try:
+                        next_config = _load_config_snapshot()
+                    except Exception as exc:
+                        failed_fingerprint = next_fingerprint
+                        reason = str(exc).strip() or exc.__class__.__name__
+                        logger.warning("Gateway still waiting for valid config snapshot: {}", reason)
+                        _write_state(status="waiting_config", note=reason)
+                        continue
+                    state = await _start_runtime(next_config, note="gateway started after config update")
                     continue
 
                 if (time.monotonic() - last_running_write) >= heartbeat_seconds:
@@ -110,14 +148,7 @@ def gateway_command(
                     _write_state(status="reloading", note=agent_issue)
                     old_config = state.config
                     await stop_gateway_runtime(state)
-                    try:
-                        state = await start_gateway_runtime(old_config, data_dir=data_dir)
-                        print_gateway_runtime_summary(state, console=console)
-                        _write_state(status="running", note="runtime recovered")
-                    except Exception as restart_error:
-                        logger.exception("Gateway recovery failed")
-                        _write_state(status="error", note=f"runtime recovery failed: {restart_error}")
-                        raise RuntimeError(f"gateway runtime recovery failed: {restart_error}") from restart_error
+                    state = await _start_runtime(old_config, note="runtime recovered")
                     continue
 
                 next_fingerprint = compute_runtime_config_fingerprint(config_path)
@@ -128,38 +159,28 @@ def gateway_command(
 
                 try:
                     next_config = load_config_strict(config_path, apply_profiles=True, resolve_env=True)
-                    ensure_runtime_dependencies(next_config)
                 except Exception as e:
                     failed_fingerprint = next_fingerprint
                     logger.warning("Skip reload due to invalid config/env snapshot: {}", e)
                     console.print(f"[yellow]Config reload skipped[/yellow]: {e}")
+                    _write_state(status="waiting_config", note=str(e))
                     continue
 
                 console.print("[cyan]↻[/cyan] Detected config/env change, reloading gateway runtime...")
                 _write_state(status="reloading", note="config/env change detected")
                 old_config = state.config
                 await stop_gateway_runtime(state)
-                try:
-                    state = await start_gateway_runtime(next_config, data_dir=data_dir)
-                    fingerprint = next_fingerprint
-                    failed_fingerprint = None
-                    print_gateway_runtime_summary(state, console=console)
+                state = await _start_runtime(next_config, note="reload succeeded")
+                if state is not None:
                     console.print("[green]✓[/green] Gateway runtime reloaded")
-                    _write_state(status="running", note="reload succeeded")
-                except Exception as e:
-                    logger.exception("Gateway reload failed, trying rollback")
-                    console.print(f"[red]Reload failed[/red]: {e}")
-                    console.print("[yellow]Attempting rollback to previous runtime...[/yellow]")
-                    try:
-                        state = await start_gateway_runtime(old_config, data_dir=data_dir)
-                        print_gateway_runtime_summary(state, console=console)
-                        fingerprint = compute_runtime_config_fingerprint(config_path)
-                        console.print("[green]✓[/green] Rollback succeeded")
-                        _write_state(status="running", note="rollback succeeded")
-                    except Exception as rollback_error:
-                        logger.exception("Gateway rollback failed")
-                        _write_state(status="error", note=f"rollback failed: {rollback_error}")
-                        raise RuntimeError(f"gateway rollback failed: {rollback_error}") from rollback_error
+                    continue
+
+                console.print("[yellow]Attempting rollback to previous runtime...[/yellow]")
+                state = await _start_runtime(old_config, note="rollback succeeded")
+                if state is not None:
+                    console.print("[green]✓[/green] Rollback succeeded")
+                else:
+                    console.print("[yellow]Gateway waiting for valid config update before restart[/yellow]")
         except KeyboardInterrupt:
             console.print("\nShutting down...")
         finally:

@@ -9,47 +9,47 @@ from typing import Any
 import httpx
 from loguru import logger
 
-from orbitclaw.capabilities.channels.base import BaseChannel
-from orbitclaw.capabilities.channels.common.retry import seconds_from_ms
-from orbitclaw.capabilities.channels.mochat_adapter import mochat_api_send, mochat_post_json
-from orbitclaw.capabilities.channels.mochat_dedup import remember_message_id
-from orbitclaw.capabilities.channels.mochat_fallback import (
+from lunaeclaw.capabilities.channels.base import BaseChannel
+from lunaeclaw.capabilities.channels.common.retry import seconds_from_ms
+from lunaeclaw.capabilities.channels.mochat_adapter import mochat_api_send, mochat_post_json
+from lunaeclaw.capabilities.channels.mochat_dedup import remember_message_id
+from lunaeclaw.capabilities.channels.mochat_fallback import (
     ensure_fallback_tasks,
     stop_fallback_tasks,
 )
-from orbitclaw.capabilities.channels.mochat_helpers import str_field
-from orbitclaw.capabilities.channels.mochat_mapper import (
+from lunaeclaw.capabilities.channels.mochat_helpers import str_field
+from lunaeclaw.capabilities.channels.mochat_mapper import (
     build_buffered_body,
     normalize_mochat_id_list,
     read_mochat_group_id,
     resolve_mochat_target,
 )
-from orbitclaw.capabilities.channels.mochat_notify import (
+from lunaeclaw.capabilities.channels.mochat_notify import (
     build_panel_notify_event,
     build_session_notify_event,
 )
-from orbitclaw.capabilities.channels.mochat_protocol import (
+from lunaeclaw.capabilities.channels.mochat_protocol import (
     parse_mochat_inbound_event,
     parse_panel_poll_events,
 )
-from orbitclaw.capabilities.channels.mochat_refresh import (
+from lunaeclaw.capabilities.channels.mochat_refresh import (
     parse_mochat_panels,
     parse_mochat_sessions,
 )
-from orbitclaw.capabilities.channels.mochat_state import (
+from lunaeclaw.capabilities.channels.mochat_state import (
     load_mochat_session_cursors,
     save_mochat_session_cursors,
 )
-from orbitclaw.capabilities.channels.mochat_subscribe import parse_subscribe_sessions_ack
-from orbitclaw.capabilities.channels.mochat_types import DelayState, MochatBufferedEntry
-from orbitclaw.capabilities.channels.mochat_watch import (
+from lunaeclaw.capabilities.channels.mochat_subscribe import parse_subscribe_sessions_ack
+from lunaeclaw.capabilities.channels.mochat_types import DelayState, MochatBufferedEntry
+from lunaeclaw.capabilities.channels.mochat_watch import (
     iter_mochat_message_add_events,
     parse_mochat_watch_payload,
 )
-from orbitclaw.core.bus.events import OutboundMessage
-from orbitclaw.core.bus.queue import MessageBus
-from orbitclaw.platform.config.schema import MochatConfig
-from orbitclaw.platform.utils.helpers import get_data_path
+from lunaeclaw.core.bus.events import OutboundMessage
+from lunaeclaw.core.bus.queue import MessageBus
+from lunaeclaw.platform.config.schema import MochatConfig
+from lunaeclaw.platform.utils.helpers import get_data_path
 
 try:
     import socketio

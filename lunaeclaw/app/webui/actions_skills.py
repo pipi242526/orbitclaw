@@ -7,21 +7,21 @@ import urllib.request
 from typing import Any
 from urllib.parse import urlparse
 
-from orbitclaw.app.webui.catalog import find_skill_library_entry, install_skill_from_library
-from orbitclaw.app.webui.common import (
+from lunaeclaw.app.webui.catalog import find_skill_library_entry, install_skill_from_library
+from lunaeclaw.app.webui.common import (
     _MAX_SKILL_IMPORT_BYTES,
     _is_private_or_local_host,
     _safe_json_object,
 )
-from orbitclaw.app.webui.i18n import ui_copy as _ui_copy
-from orbitclaw.app.webui.services_skills import (
+from lunaeclaw.app.webui.i18n import ui_copy as _ui_copy
+from lunaeclaw.app.webui.services_skills import (
     enable_skill,
     import_skill_markdown,
     localize_skill_install_reason,
     set_enabled_skills,
     toggle_skill,
 )
-from orbitclaw.platform.config.schema import SkillsConfig, ToolsConfig
+from lunaeclaw.platform.config.schema import SkillsConfig, ToolsConfig
 
 
 def handle_post_skills(handler: Any, form: dict[str, list[str]]) -> None:
@@ -81,7 +81,7 @@ def handle_post_skills(handler: Any, form: dict[str, list[str]]) -> None:
         if _is_private_or_local_host(parsed.hostname):
             raise ValueError(t("skill_url host must be public", "skill_url 主机必须是公网地址"))
         try:
-            req = urllib.request.Request(skill_url, headers={"User-Agent": "orbitclaw-webui/0.1"})
+            req = urllib.request.Request(skill_url, headers={"User-Agent": "lunaeclaw-webui/0.1"})
             with urllib.request.urlopen(req, timeout=20) as resp:
                 content_type = (resp.headers.get("Content-Type") or "").lower()
                 if content_type and "text" not in content_type and "markdown" not in content_type:

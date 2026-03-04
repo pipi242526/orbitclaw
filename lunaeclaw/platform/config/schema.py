@@ -187,7 +187,7 @@ class ChannelsConfig(Base):
 class AgentDefaults(Base):
     """Default agent configuration."""
 
-    workspace: str = "~/.orbitclaw/workspace"
+    workspace: str = "~/.lunaeclaw/workspace"
     model: str = "anthropic/claude-opus-4-5"
     reply_language: str = "auto"  # auto | zh-CN | en | ja | ...
     auto_reply_fallback_language: str = "zh-CN"  # Fallback when language detection is ambiguous
@@ -299,7 +299,7 @@ class ClaudeCodeToolConfig(Base):
 class FilesHubConfig(Base):
     """Unified file store configuration."""
 
-    exports_dir: str = ""  # Empty -> ~/.orbitclaw/exports
+    exports_dir: str = ""  # Empty -> ~/.lunaeclaw/exports
 
 
 class MCPServerConfig(Base):
@@ -351,7 +351,7 @@ class ProfilesConfig(Base):
 
 
 class Config(BaseSettings):
-    """Root configuration for orbitclaw."""
+    """Root configuration for lunaeclaw."""
 
     agents: AgentsConfig = Field(default_factory=AgentsConfig)
     channels: ChannelsConfig = Field(default_factory=ChannelsConfig)
@@ -368,7 +368,7 @@ class Config(BaseSettings):
 
     def _match_provider(self, model: str | None = None) -> tuple["ProviderConfig | None", str | None]:
         """Match provider config and its registry name. Returns (config, spec_name)."""
-        from orbitclaw.platform.providers.registry import PROVIDERS
+        from lunaeclaw.platform.providers.registry import PROVIDERS
 
         model_lower = (model or self.agents.defaults.model).lower()
         model_normalized = model_lower.replace("-", "_")
@@ -420,7 +420,7 @@ class Config(BaseSettings):
 
     def get_api_base(self, model: str | None = None) -> str | None:
         """Get API base URL for the given model. Applies default URLs for known gateways."""
-        from orbitclaw.platform.providers.registry import find_by_name
+        from lunaeclaw.platform.providers.registry import find_by_name
 
         p, name = self._match_provider(model)
         if p and p.api_base:
@@ -434,4 +434,4 @@ class Config(BaseSettings):
                 return spec.default_api_base
         return None
 
-    model_config = ConfigDict(env_prefix="ORBITCLAW_", env_nested_delimiter="__")
+    model_config = ConfigDict(env_prefix="LUNAECLAW_", env_nested_delimiter="__")

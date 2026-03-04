@@ -2,7 +2,7 @@
 name: claude-code
 description: 在聊天中通过 claude_code 工具控制服务器里的 Claude Code（tmux 会话模式）
 metadata:
-  orbitclaw:
+  lunaeclaw:
     requires:
       bins: [tmux, claude]
       network: false

@@ -8,9 +8,9 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable
 
-DEFAULT_SCAN_ROOTS = ("orbitclaw",)
+DEFAULT_SCAN_ROOTS = ("lunaeclaw",)
 DEFAULT_EXCLUDES = {
-    "orbitclaw/app/webui/copy_catalog.py",  # generated catalog, intentionally large
+    "lunaeclaw/app/webui/copy_catalog.py",  # generated catalog, intentionally large
 }
 
 

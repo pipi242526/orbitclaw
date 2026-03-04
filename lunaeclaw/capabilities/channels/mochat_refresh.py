@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from orbitclaw.capabilities.channels.mochat_helpers import str_field
+from lunaeclaw.capabilities.channels.mochat_helpers import str_field
 
 
 def parse_mochat_sessions(response: dict[str, Any]) -> tuple[list[str], dict[str, str]]:

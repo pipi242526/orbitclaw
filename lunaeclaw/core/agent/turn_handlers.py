@@ -7,16 +7,16 @@ from typing import TYPE_CHECKING, Any, Callable
 
 from loguru import logger
 
-from orbitclaw.capabilities.tools.message import MessageTool
-from orbitclaw.core.agent.turn_planner import (
+from lunaeclaw.capabilities.tools.message import MessageTool
+from lunaeclaw.core.agent.turn_planner import (
     build_cli_progress_callback,
     build_processing_notice_sender,
     make_outbound,
     resolve_reply_to,
 )
-from orbitclaw.core.agent.turn_runner import cancel_task_safely, create_delayed_notice_task
-from orbitclaw.core.bus.events import InboundMessage, OutboundMessage
-from orbitclaw.core.context.context_access import (
+from lunaeclaw.core.agent.turn_runner import cancel_task_safely, create_delayed_notice_task
+from lunaeclaw.core.bus.events import InboundMessage, OutboundMessage
+from lunaeclaw.core.context.context_access import (
     build_initial_messages,
     build_system_messages,
     get_effective_model,
@@ -26,7 +26,7 @@ from orbitclaw.core.context.context_access import (
 )
 
 if TYPE_CHECKING:
-    from orbitclaw.services.session.manager import Session
+    from lunaeclaw.services.session.manager import Session
 
 
 async def process_system_message(loop: Any, msg: "InboundMessage") -> OutboundMessage:

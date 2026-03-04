@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from orbitclaw.capabilities.channels.mochat_helpers import (
+from lunaeclaw.capabilities.channels.mochat_helpers import (
     make_synthetic_event,
     normalize_content,
     parse_timestamp,
@@ -13,9 +13,9 @@ from orbitclaw.capabilities.channels.mochat_helpers import (
     safe_dict,
     str_field,
 )
-from orbitclaw.capabilities.channels.mochat_mapper import resolve_require_mention
-from orbitclaw.capabilities.channels.mochat_types import MochatBufferedEntry
-from orbitclaw.platform.config.schema import MochatConfig
+from lunaeclaw.capabilities.channels.mochat_mapper import resolve_require_mention
+from lunaeclaw.capabilities.channels.mochat_types import MochatBufferedEntry
+from lunaeclaw.platform.config.schema import MochatConfig
 
 
 @dataclass

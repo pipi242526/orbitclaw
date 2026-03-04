@@ -12,9 +12,9 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
 
-from orbitclaw.platform.config.schema import Config
-from orbitclaw.platform.providers.endpoint_validator import validate_default_model_reference
-from orbitclaw.platform.utils.helpers import get_media_dir
+from lunaeclaw.platform.config.schema import Config
+from lunaeclaw.platform.providers.endpoint_validator import validate_default_model_reference
+from lunaeclaw.platform.utils.helpers import get_media_dir
 
 _ENDPOINT_TYPES = [
     "openai_compatible",
@@ -290,7 +290,7 @@ def _fetch_public_json(url: str, *, max_bytes: int = _MAX_REMOTE_JSON_BYTES) -> 
         raise ValueError("URL must include host")
     if _is_private_or_local_host(parsed.hostname):
         raise ValueError("URL host must be public")
-    req = urllib.request.Request(url, headers={"Accept": "application/json", "User-Agent": "orbitclaw-webui/0.1"})
+    req = urllib.request.Request(url, headers={"Accept": "application/json", "User-Agent": "lunaeclaw-webui/0.1"})
     try:
         with urllib.request.urlopen(req, timeout=20) as resp:
             blob = resp.read(max_bytes + 1)
@@ -306,7 +306,7 @@ def _fetch_public_json(url: str, *, max_bytes: int = _MAX_REMOTE_JSON_BYTES) -> 
 
 def _collect_skill_rows(config: Config) -> list[dict[str, Any]]:
     try:
-        from orbitclaw.core.context.skills import SkillsLoader
+        from lunaeclaw.core.context.skills import SkillsLoader
     except Exception as e:
         return [
             {

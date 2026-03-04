@@ -1,6 +1,6 @@
-# orbitclaw Skills
+# lunaeclaw Skills
 
-This directory contains built-in skills that extend orbitclaw's capabilities.
+This directory contains built-in skills that extend lunaeclaw's capabilities.
 
 ## Skill Format
 

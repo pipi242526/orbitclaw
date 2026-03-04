@@ -2,10 +2,10 @@
 
 from typing import TYPE_CHECKING, Any
 
-from orbitclaw.capabilities.tools.base import Tool
+from lunaeclaw.capabilities.tools.base import Tool
 
 if TYPE_CHECKING:
-    from orbitclaw.core.agent.subagent import SubagentManager
+    from lunaeclaw.core.agent.subagent import SubagentManager
 
 
 class SpawnTool(Tool):

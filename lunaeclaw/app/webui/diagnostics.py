@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-from orbitclaw.app.webui.i18n import ui_copy as _ui_copy
-from orbitclaw.platform.config.migration_checker import collect_config_migration_findings
-from orbitclaw.platform.config.schema import Config
+from lunaeclaw.app.webui.i18n import ui_copy as _ui_copy
+from lunaeclaw.platform.config.migration_checker import collect_config_migration_findings
+from lunaeclaw.platform.config.schema import Config
 
 _BUILTIN_TOOL_NAMES = {
     "read_file",

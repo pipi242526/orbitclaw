@@ -5,7 +5,7 @@ import types
 import httpx
 import pytest
 
-from orbitclaw.capabilities.tools.web import WeatherTool, WebFetchTool
+from lunaeclaw.capabilities.tools.web import WeatherTool, WebFetchTool
 
 
 class _FakeReadabilityDoc:
@@ -51,7 +51,7 @@ def _install_fake_readability(monkeypatch: pytest.MonkeyPatch) -> None:
 
 def _patch_async_client(monkeypatch: pytest.MonkeyPatch, response: httpx.Response) -> None:
     monkeypatch.setattr(
-        "orbitclaw.capabilities.tools.web.httpx.AsyncClient",
+        "lunaeclaw.capabilities.tools.web.httpx.AsyncClient",
         lambda *args, **kwargs: _FakeAsyncClient(response),
     )
 
@@ -175,7 +175,7 @@ async def test_weather_tool_returns_current_and_forecast(monkeypatch: pytest.Mon
         ],
     }
     monkeypatch.setattr(
-        "orbitclaw.capabilities.tools.web.httpx.AsyncClient",
+        "lunaeclaw.capabilities.tools.web.httpx.AsyncClient",
         lambda *args, **kwargs: _FakeAsyncClient(_json_response("https://wttr.in/New%20York?format=j1", payload)),
     )
 
@@ -189,7 +189,7 @@ async def test_weather_tool_returns_current_and_forecast(monkeypatch: pytest.Mon
 
 @pytest.mark.asyncio
 async def test_weather_tool_returns_structured_error_on_fetch_failure(monkeypatch: pytest.MonkeyPatch):
-    monkeypatch.setattr("orbitclaw.capabilities.tools.web.httpx.AsyncClient", lambda *args, **kwargs: _FailingAsyncClient())
+    monkeypatch.setattr("lunaeclaw.capabilities.tools.web.httpx.AsyncClient", lambda *args, **kwargs: _FailingAsyncClient())
     tool = WeatherTool()
     data = json.loads(await tool.execute(location="New York"))
     assert data["error"] == "weather_fetch_failed"

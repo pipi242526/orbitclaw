@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import hashlib
 
-from orbitclaw.app.webui.copy_catalog import WEBUI_COPY_CATALOG
+from lunaeclaw.app.webui.copy_catalog import WEBUI_COPY_CATALOG
 
 UI_LANGUAGE_CHOICES: list[tuple[str, str]] = [
     ("en", "English"),
@@ -27,7 +27,7 @@ UI_TEXTS = {
         "theme_dark": "Dark",
         "not_found": "Not Found",
         "error": "Error",
-        "subtitle": "Lightweight config console (Host: {host}:{port}) · Path-token protected",
+        "subtitle": "Lightweight control hub (Host: {host}:{port}) · Path-token protected",
         "copied": "Copied",
         "unsupported_action": "Unsupported action",
         "stopping_webui": "Stopping Web UI...",
@@ -51,7 +51,7 @@ UI_TEXTS = {
         "theme_dark": "深色",
         "not_found": "未找到页面",
         "error": "错误",
-        "subtitle": "轻量配置管理台（Host: {host}:{port}） · 使用路径密钥访问",
+        "subtitle": "轻量控制中心（Host: {host}:{port}） · 使用路径密钥访问",
         "copied": "已复制",
         "unsupported_action": "不支持的操作",
         "stopping_webui": "正在停止 Web UI...",

@@ -58,7 +58,7 @@ verify:
 	./scripts/release/verify_server.sh
 
 gateway:
-	uv run orbitclaw gateway
+	uv run lunaeclaw gateway
 
 webui:
-	uv run orbitclaw webui --host 0.0.0.0 --port 18791
+	uv run lunaeclaw webui --host 0.0.0.0 --port 18791

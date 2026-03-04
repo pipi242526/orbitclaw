@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 
-from orbitclaw.capabilities.channels.feishu_parser import (
+from lunaeclaw.capabilities.channels.feishu_parser import (
     extract_post_text,
     extract_share_card_content,
 )

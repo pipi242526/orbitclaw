@@ -7,7 +7,7 @@ from typing import Callable
 
 from loguru import logger
 
-from orbitclaw.platform.providers.base import LLMProvider
+from lunaeclaw.platform.providers.base import LLMProvider
 
 SUPPORTED_REPLY_LANGUAGES = {"zh-CN", "ja", "ko", "en"}
 

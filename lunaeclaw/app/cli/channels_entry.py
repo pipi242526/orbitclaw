@@ -12,8 +12,8 @@ import typer
 from rich.console import Console
 from rich.table import Table
 
-from orbitclaw.platform.config.loader import load_config
-from orbitclaw.platform.utils.helpers import get_bridge_dir
+from lunaeclaw.platform.config.loader import load_config
+from lunaeclaw.platform.utils.helpers import get_bridge_dir
 
 
 def channels_status_command(
@@ -87,7 +87,7 @@ def get_bridge_dir_command(*, console: Console, logo: str) -> Path:
 
     if not source:
         console.print("[red]Bridge source not found.[/red]")
-        console.print("Try reinstalling: pip install --force-reinstall orbitclaw")
+        console.print("Try reinstalling: pip install --force-reinstall lunaeclaw")
         raise typer.Exit(1)
 
     console.print(f"{logo} Setting up bridge...")

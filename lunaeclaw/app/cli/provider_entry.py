@@ -50,7 +50,7 @@ def _login_github_copilot(console: Console) -> None:
 
 def provider_login_command(*, provider: str, console: Console, logo: str) -> None:
     """Authenticate with an OAuth provider."""
-    from orbitclaw.platform.providers.registry import PROVIDERS
+    from lunaeclaw.platform.providers.registry import PROVIDERS
 
     handlers = {
         "openai_codex": _login_openai_codex,

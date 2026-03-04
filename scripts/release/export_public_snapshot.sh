@@ -47,7 +47,7 @@ for path in \
   .github \
   assets \
   bridge \
-  orbitclaw \
+  lunaeclaw \
   scripts \
   docs/public \
   tests/public

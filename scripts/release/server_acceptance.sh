@@ -3,7 +3,7 @@ set -euo pipefail
 
 SERVER_HOST="${SERVER_HOST:-}"
 SERVER_USER="${SERVER_USER:-root}"
-SERVER_DIR="${SERVER_DIR:-/root/OrbitClaw}"
+SERVER_DIR="${SERVER_DIR:-/root/LunaeClaw}"
 VERIFY_WEBUI="${VERIFY_WEBUI:-1}"
 VERIFY_GATEWAY_STATE="${VERIFY_GATEWAY_STATE:-1}"
 SERVER_SSH_KEY="${SERVER_SSH_KEY:-}"
@@ -58,15 +58,15 @@ echo "[server-acceptance] compose config check"
 docker compose config -q
 
 echo "[server-acceptance] bring up gateway"
-docker compose up -d orbitclaw-gateway
+docker compose up -d lunaeclaw-gateway
 sleep 2
-docker compose ps orbitclaw-gateway
+docker compose ps lunaeclaw-gateway
 
 echo "[server-acceptance] runtime status check"
-docker compose run --rm orbitclaw-cli status
+docker compose run --rm lunaeclaw-cli status
 
 echo "[server-acceptance] runtime doctor check"
-docker compose run --rm orbitclaw-cli doctor
+docker compose run --rm lunaeclaw-cli doctor
 
 if [[ "${VERIFY_GATEWAY_STATE}" == "1" ]]; then
   echo "[server-acceptance] gateway.state freshness check"
@@ -78,7 +78,7 @@ import sys
 import time
 from pathlib import Path
 
-state_path = Path("/root/.orbitclaw/runtime/gateway.state.json")
+state_path = Path("/root/.lunaeclaw/runtime/gateway.state.json")
 if not state_path.exists():
     print(f"[server-acceptance] missing gateway state file: {state_path}")
     sys.exit(1)
@@ -106,8 +106,8 @@ fi
 
 if [[ "${VERIFY_WEBUI}" == "1" ]]; then
   echo "[server-acceptance] webui health check"
-  docker compose --profile webui up -d orbitclaw-webui
-  TOKEN="$(docker compose exec -T orbitclaw-webui sh -lc 'cat /root/.orbitclaw/webui.path-token 2>/dev/null || cat /root/.orbitclaw/webui.path_token 2>/dev/null || true' | tr -d '\r\n')"
+  docker compose --profile webui up -d lunaeclaw-webui
+  TOKEN="$(docker compose exec -T lunaeclaw-webui sh -lc 'cat /root/.lunaeclaw/webui.path-token 2>/dev/null || cat /root/.lunaeclaw/webui.path_token 2>/dev/null || true' | tr -d '\r\n')"
   if [[ -z "${TOKEN}" ]]; then
     echo "[server-acceptance] webui path token not found"
     exit 1

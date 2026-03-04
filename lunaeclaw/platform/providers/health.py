@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 
-from orbitclaw.platform.config.schema import EndpointProviderConfig
-from orbitclaw.platform.providers.base import LLMResponse
+from lunaeclaw.platform.config.schema import EndpointProviderConfig
+from lunaeclaw.platform.providers.base import LLMResponse
 
 
 def build_error_response(reason: str) -> LLMResponse:

@@ -6,11 +6,11 @@ from html import escape
 from pathlib import Path
 from typing import Any
 
-from orbitclaw.app.webui.common import _MEDIA_PAGE_SIZE, _list_media_rows, _list_store_rows
-from orbitclaw.app.webui.i18n import ui_copy as _ui_copy
-from orbitclaw.app.webui.i18n import ui_term as _ui_term
-from orbitclaw.app.webui.icons import icon_svg
-from orbitclaw.platform.utils.helpers import get_exports_dir, get_media_dir
+from lunaeclaw.app.webui.common import _MEDIA_PAGE_SIZE, _list_media_rows, _list_store_rows
+from lunaeclaw.app.webui.i18n import ui_copy as _ui_copy
+from lunaeclaw.app.webui.i18n import ui_term as _ui_term
+from lunaeclaw.app.webui.icons import icon_svg
+from lunaeclaw.platform.utils.helpers import get_exports_dir, get_media_dir
 
 
 def render_media(handler: Any, *, msg: str = "", err: str = "", media_page: int = 1, exports_page: int = 1) -> None:
@@ -204,8 +204,8 @@ def render_media(handler: Any, *, msg: str = "", err: str = "", media_page: int 
   <input type="hidden" name="media_page" value="{media_page}">
   <input type="hidden" name="exports_page" value="{exports_page}">
   <div class="field">
-    <label>{t("tools.filesHub.exportsDir (empty = default", "tools.filesHub.exportsDir（留空=默认")} <code>~/.orbitclaw/exports</code>{t(")", "）")}</label>
-    <input name="exports_dir" value="{escape(configured_exports_dir)}" placeholder="{t('Example: /data/orbitclaw-exports or exports', '例如：/data/orbitclaw-exports 或 exports')}">
+    <label>{t("tools.filesHub.exportsDir (empty = default", "tools.filesHub.exportsDir（留空=默认")} <code>~/.lunaeclaw/exports</code>{t(")", "）")}</label>
+    <input name="exports_dir" value="{escape(configured_exports_dir)}" placeholder="{t('Example: /data/lunaeclaw-exports or exports', '例如：/data/lunaeclaw-exports 或 exports')}">
   </div>
   <div class="row">
     <button class="btn primary icon-btn" type="submit" name="action" value="save_exports_dir">{icon_save}{t("Save exports directory", "保存导出目录")}</button>

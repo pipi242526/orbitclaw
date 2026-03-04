@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
-from orbitclaw.platform.config.loader import inspect_config_hints
+from lunaeclaw.platform.config.loader import inspect_config_hints
 
 
 @dataclass(frozen=True)
@@ -18,7 +18,7 @@ class ConfigMigrationFinding:
 def _suggestion_for_hint(hint: str) -> str:
     text = (hint or "").strip()
     if text.startswith("config parse error:"):
-        return "Fix JSON syntax in config file, then rerun `orbitclaw doctor` (or open WebUI and save the related page)."
+        return "Fix JSON syntax in config file, then rerun `lunaeclaw doctor` (or open WebUI and save the related page)."
     if text.startswith("config read error:"):
         return "Check file permissions/path and ensure config.json is readable."
     if "legacy key `tools.exec.restrictToWorkspace`" in text:

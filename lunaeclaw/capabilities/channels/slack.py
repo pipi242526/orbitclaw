@@ -10,10 +10,10 @@ from slack_sdk.socket_mode.websockets import SocketModeClient
 from slack_sdk.web.async_client import AsyncWebClient
 from slackify_markdown import slackify_markdown
 
-from orbitclaw.capabilities.channels.base import BaseChannel
-from orbitclaw.core.bus.events import OutboundMessage
-from orbitclaw.core.bus.queue import MessageBus
-from orbitclaw.platform.config.schema import SlackConfig
+from lunaeclaw.capabilities.channels.base import BaseChannel
+from lunaeclaw.core.bus.events import OutboundMessage
+from lunaeclaw.core.bus.queue import MessageBus
+from lunaeclaw.platform.config.schema import SlackConfig
 
 
 class SlackChannel(BaseChannel):

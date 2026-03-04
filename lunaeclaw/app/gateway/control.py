@@ -11,7 +11,7 @@ from pathlib import Path
 
 def discover_runtime_env_files() -> list[Path]:
     """Return env helper files that affect config interpolation."""
-    explicit = os.environ.get("ORBITCLAW_ENV_FILES", "").strip()
+    explicit = os.environ.get("LUNAECLAW_ENV_FILES", "").strip()
     files: list[Path] = []
     if explicit:
         for raw in explicit.split(os.pathsep):
@@ -20,7 +20,7 @@ def discover_runtime_env_files() -> list[Path]:
                 files.append(p)
         return files
 
-    from orbitclaw.platform.utils.helpers import get_env_dir, get_env_file
+    from lunaeclaw.platform.utils.helpers import get_env_dir, get_env_file
 
     primary = get_env_file()
     if primary.exists() and primary.is_file():

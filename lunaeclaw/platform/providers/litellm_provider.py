@@ -7,8 +7,8 @@ import json_repair
 import litellm
 from litellm import acompletion
 
-from orbitclaw.platform.providers.base import LLMProvider, LLMResponse, ToolCallRequest
-from orbitclaw.platform.providers.registry import find_by_model, find_gateway
+from lunaeclaw.platform.providers.base import LLMProvider, LLMResponse, ToolCallRequest
+from lunaeclaw.platform.providers.registry import find_by_model, find_gateway
 
 # Standard OpenAI chat-completion message keys; extras (e.g. reasoning_content) are stripped for strict providers.
 _ALLOWED_MSG_KEYS = frozenset({"role", "content", "tool_calls", "tool_call_id", "name"})

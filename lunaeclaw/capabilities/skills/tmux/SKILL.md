@@ -4,7 +4,7 @@ description: Remote-control tmux sessions for interactive CLIs by sending keystr
 category: terminal
 lang: en
 requires_cli: tmux
-metadata: {"orbitclaw":{"emoji":"🧵","os":["darwin","linux"],"requires":{"bins":["tmux"]}}}
+metadata: {"lunaeclaw":{"emoji":"🧵","os":["darwin","linux"],"requires":{"bins":["tmux"]}}}
 ---
 
 # tmux Skill
@@ -14,10 +14,10 @@ Use tmux only when you need an interactive TTY. Prefer exec background mode for 
 ## Quickstart (isolated socket, exec tool)
 
 ```bash
-SOCKET_DIR="${ORBITCLAW_TMUX_SOCKET_DIR:-${TMPDIR:-/tmp}/orbitclaw-tmux-sockets}"
+SOCKET_DIR="${LUNAECLAW_TMUX_SOCKET_DIR:-${TMPDIR:-/tmp}/lunaeclaw-tmux-sockets}"
 mkdir -p "$SOCKET_DIR"
-SOCKET="$SOCKET_DIR/orbitclaw.sock"
-SESSION=orbitclaw-python
+SOCKET="$SOCKET_DIR/lunaeclaw.sock"
+SESSION=lunaeclaw-python
 
 tmux -S "$SOCKET" new -d -s "$SESSION" -n shell
 tmux -S "$SOCKET" send-keys -t "$SESSION":0.0 -- 'PYTHON_BASIC_REPL=1 python3 -q' Enter
@@ -34,8 +34,8 @@ To monitor:
 
 ## Socket convention
 
-- Use `ORBITCLAW_TMUX_SOCKET_DIR` environment variable.
-- Default socket path: `"$ORBITCLAW_TMUX_SOCKET_DIR/orbitclaw.sock"`.
+- Use `LUNAECLAW_TMUX_SOCKET_DIR` environment variable.
+- Default socket path: `"$LUNAECLAW_TMUX_SOCKET_DIR/lunaeclaw.sock"`.
 
 ## Targeting panes and naming
 
@@ -46,7 +46,7 @@ To monitor:
 ## Finding sessions
 
 - List sessions on your socket: `{baseDir}/scripts/find-sessions.sh -S "$SOCKET"`.
-- Scan all sockets: `{baseDir}/scripts/find-sessions.sh --all` (uses `ORBITCLAW_TMUX_SOCKET_DIR`).
+- Scan all sockets: `{baseDir}/scripts/find-sessions.sh --all` (uses `LUNAECLAW_TMUX_SOCKET_DIR`).
 
 ## Sending input safely
 

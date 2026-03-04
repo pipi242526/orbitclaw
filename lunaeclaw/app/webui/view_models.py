@@ -4,9 +4,9 @@ from __future__ import annotations
 
 from typing import Any
 
-from orbitclaw.app.webui.catalog import SKILL_LIBRARY as _SKILL_LIBRARY
-from orbitclaw.app.webui.catalog import evaluate_skill_library_health
-from orbitclaw.app.webui.common import (
+from lunaeclaw.app.webui.catalog import SKILL_LIBRARY as _SKILL_LIBRARY
+from lunaeclaw.app.webui.catalog import evaluate_skill_library_health
+from lunaeclaw.app.webui.common import (
     _CHANNEL_QUICK_SPECS,
     _ENV_PLACEHOLDER_RE,
     _collect_skill_rows,
@@ -16,8 +16,8 @@ from orbitclaw.app.webui.common import (
     _mask_secret,
     _mask_sensitive_url,
 )
-from orbitclaw.app.webui.services_mcp import is_mcp_server_enabled
-from orbitclaw.platform.utils.helpers import get_global_skills_path
+from lunaeclaw.app.webui.services_mcp import is_mcp_server_enabled
+from lunaeclaw.platform.utils.helpers import get_global_skills_path
 
 
 def build_endpoint_switch_rows(cfg: Any, *, per_endpoint_limit: int = 8) -> list[dict[str, str | bool]]:

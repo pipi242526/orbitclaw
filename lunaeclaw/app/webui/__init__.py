@@ -1,2 +1,2 @@
-"""Lightweight local web UI for orbitclaw configuration management."""
+"""Lightweight local web UI for lunaeclaw configuration management."""
 

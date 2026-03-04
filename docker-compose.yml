@@ -1,68 +1,63 @@
-x-common-config: &common-config
+name: ${COMPOSE_PROJECT_NAME:-lunaeclaw}
+
+x-lunaeclaw-common: &lunaeclaw-common
   build:
     context: .
     dockerfile: Dockerfile
+  image: lunaeclaw:local
+  init: true
+  restart: unless-stopped
+  working_dir: /app
+  environment: &lunaeclaw-env
+    LUNAECLAW_DATA_DIR: /root/.lunaeclaw
+    LUNAECLAW_WEBUI_PATH_TOKEN: ${LUNAECLAW_WEBUI_PATH_TOKEN:-}
+    SSL_CERT_FILE: /etc/ssl/certs/ca-certificates.crt
+    REQUESTS_CA_BUNDLE: /etc/ssl/certs/ca-certificates.crt
+    CURL_CA_BUNDLE: /etc/ssl/certs/ca-certificates.crt
   volumes:
-    - ~/.orbitclaw:/root/.orbitclaw
+    - type: bind
+      source: ${LUNAECLAW_DATA_DIR:-./.lunaeclaw-data}
+      target: /root/.lunaeclaw
 
 services:
-  orbitclaw-gateway:
-    container_name: orbitclaw-gateway
-    <<: *common-config
-    command: ["gateway"]
-    restart: unless-stopped
-    environment:
-      ORBITCLAW_DATA_DIR: /root/.orbitclaw
-      # Use Debian system CA bundle for Python requests/urllib3 inside the container.
-      SSL_CERT_FILE: /etc/ssl/certs/ca-certificates.crt
-      REQUESTS_CA_BUNDLE: /etc/ssl/certs/ca-certificates.crt
-      CURL_CA_BUNDLE: /etc/ssl/certs/ca-certificates.crt
+  lunaeclaw-gateway:
+    <<: *lunaeclaw-common
+    command: ["gateway", "--port", "${GATEWAY_PORT:-18790}"]
     ports:
-      - 18790:18790
-    deploy:
-      resources:
-        limits:
-          cpus: '1'
-          memory: 1G
-        reservations:
-          cpus: '0.25'
-          memory: 256M
+      - "${GATEWAY_PORT:-18790}:${GATEWAY_PORT:-18790}"
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - import json,sys,pathlib; p=pathlib.Path('/root/.lunaeclaw/runtime/gateway.state.json'); sys.exit(0 if p.exists() and json.loads(p.read_text(encoding='utf-8')).get('status')=='running' else 1)
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
 
-  orbitclaw-webui:
-    container_name: orbitclaw-webui
-    <<: *common-config
-    profiles:
-      - webui
-    command: ["webui", "--host", "0.0.0.0", "--port", "18791"]
-    restart: unless-stopped
-    environment:
-      ORBITCLAW_DATA_DIR: /root/.orbitclaw
-      # Optional: set in shell before `docker compose up` to enable Web UI auth.
-      ORBITCLAW_WEBUI_PATH_TOKEN: ${ORBITCLAW_WEBUI_PATH_TOKEN:-}
-      # Use Debian system CA bundle for Python requests/urllib3 inside the container.
-      SSL_CERT_FILE: /etc/ssl/certs/ca-certificates.crt
-      REQUESTS_CA_BUNDLE: /etc/ssl/certs/ca-certificates.crt
-      CURL_CA_BUNDLE: /etc/ssl/certs/ca-certificates.crt
+  lunaeclaw-webui:
+    <<: *lunaeclaw-common
+    command: ["webui", "--host", "0.0.0.0", "--port", "${WEBUI_PORT:-18791}"]
+    depends_on:
+      lunaeclaw-gateway:
+        condition: service_healthy
     ports:
-      - 18791:18791
-    deploy:
-      resources:
-        limits:
-          cpus: '0.50'
-          memory: 512M
-        reservations:
-          cpus: '0.10'
-          memory: 128M
-  
-  orbitclaw-cli:
-    <<: *common-config
+      - "${WEBUI_PORT:-18791}:${WEBUI_PORT:-18791}"
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - curl -fsS http://127.0.0.1:${WEBUI_PORT:-18791}/healthz >/dev/null
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+
+  lunaeclaw-cli:
+    <<: *lunaeclaw-common
     profiles:
       - cli
+    restart: "no"
     command: ["status"]
-    environment:
-      ORBITCLAW_DATA_DIR: /root/.orbitclaw
-      SSL_CERT_FILE: /etc/ssl/certs/ca-certificates.crt
-      REQUESTS_CA_BUNDLE: /etc/ssl/certs/ca-certificates.crt
-      CURL_CA_BUNDLE: /etc/ssl/certs/ca-certificates.crt
     stdin_open: true
     tty: true

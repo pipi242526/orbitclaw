@@ -4,17 +4,17 @@ from __future__ import annotations
 
 from typing import Any
 
-from orbitclaw.app.webui.common import (
+from lunaeclaw.app.webui.common import (
     _parse_csv,
     _safe_json_object,
     _sanitize_env_key,
 )
-from orbitclaw.app.webui.i18n import ui_copy as _ui_copy
-from orbitclaw.app.webui.services_channels import (
+from lunaeclaw.app.webui.i18n import ui_copy as _ui_copy
+from lunaeclaw.app.webui.services_channels import (
     apply_quick_channel_update,
     find_quick_channel_spec,
 )
-from orbitclaw.platform.config.schema import ChannelsConfig
+from lunaeclaw.platform.config.schema import ChannelsConfig
 
 
 def handle_post_channels(handler: Any, form: dict[str, list[str]]) -> None:

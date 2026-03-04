@@ -6,17 +6,17 @@ from html import escape
 from pathlib import Path
 from typing import Any, Callable
 
-from orbitclaw.app.webui.common import (
+from lunaeclaw.app.webui.common import (
     _pretty_json,
 )
-from orbitclaw.app.webui.i18n import ui_copy as _ui_copy
-from orbitclaw.app.webui.i18n import ui_term as _ui_term
-from orbitclaw.app.webui.icons import icon_svg
-from orbitclaw.app.webui.view_models import (
+from lunaeclaw.app.webui.i18n import ui_copy as _ui_copy
+from lunaeclaw.app.webui.i18n import ui_term as _ui_term
+from lunaeclaw.app.webui.icons import icon_svg
+from lunaeclaw.app.webui.view_models import (
     build_channel_overview_rows,
     build_channel_quick_models,
 )
-from orbitclaw.platform.config.loader import load_config
+from lunaeclaw.platform.config.loader import load_config
 
 GatewayRuntimeFn = Callable[[], tuple[bool, str, str]]
 

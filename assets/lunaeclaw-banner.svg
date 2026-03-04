@@ -1,19 +1,38 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 300" role="img" aria-label="OrbitClaw banner">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 300" role="img" aria-label="LunaeClaw banner">
   <defs>
-    <linearGradient id="g1" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0%" stop-color="#0f172a"/>
-      <stop offset="100%" stop-color="#0b3d3a"/>
+    <linearGradient id="bn-bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#0b1220"/>
+      <stop offset="55%" stop-color="#14243d"/>
+      <stop offset="100%" stop-color="#1a3457"/>
     </linearGradient>
-    <linearGradient id="g2" x1="0" y1="0" x2="1" y2="0">
-      <stop offset="0%" stop-color="#38bdf8"/>
-      <stop offset="100%" stop-color="#34d399"/>
+    <linearGradient id="bn-moon" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#ffe2a8"/>
+      <stop offset="100%" stop-color="#ffc56a"/>
+    </linearGradient>
+    <linearGradient id="bn-claw" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#6bd6ff"/>
+      <stop offset="100%" stop-color="#35b0ff"/>
     </linearGradient>
   </defs>
-  <rect width="1200" height="300" rx="30" fill="url(#g1)"/>
-  <circle cx="150" cy="150" r="92" fill="none" stroke="url(#g2)" stroke-width="14"/>
-  <circle cx="150" cy="150" r="52" fill="#0b1220" stroke="#67e8f9" stroke-width="6"/>
-  <path d="M150 95 L168 128 L132 128 Z" fill="#34d399"/>
-  <text x="280" y="135" fill="#f8fafc" font-size="64" font-family="Avenir Next, PingFang SC, Noto Sans SC, sans-serif" font-weight="700">OrbitClaw</text>
-  <text x="280" y="185" fill="#cbd5e1" font-size="30" font-family="Avenir Next, PingFang SC, Noto Sans SC, sans-serif">Lightweight Agent Runtime</text>
-  <text x="280" y="225" fill="#94a3b8" font-size="24" font-family="Avenir Next, PingFang SC, Noto Sans SC, sans-serif">CN-first · TG-ready · MCP-extensible</text>
+
+  <rect width="1200" height="300" rx="28" fill="url(#bn-bg)"/>
+  <circle cx="1080" cy="-80" r="220" fill="#4a8fff" opacity="0.12"/>
+  <circle cx="0" cy="320" r="240" fill="#71b8ff" opacity="0.08"/>
+
+  <g transform="translate(54 40)">
+    <rect x="0" y="0" width="220" height="220" rx="54" fill="#0f1c30" fill-opacity="0.55" stroke="#b8d8ff" stroke-opacity="0.24"/>
+    <circle cx="104" cy="104" r="58" fill="url(#bn-moon)"/>
+    <circle cx="125" cy="93" r="56" fill="#14243d"/>
+    <g fill="none" stroke="url(#bn-claw)" stroke-width="8" stroke-linecap="round">
+      <path d="M135 62c28 14 46 37 50 67"/>
+      <path d="M125 77c24 15 37 32 39 55"/>
+      <path d="M116 92c18 13 27 27 29 45"/>
+    </g>
+    <circle cx="56" cy="54" r="3.4" fill="#fff" opacity="0.82"/>
+    <circle cx="170" cy="46" r="2.8" fill="#fff" opacity="0.68"/>
+  </g>
+
+  <text x="320" y="128" fill="#f8fbff" font-size="66" font-family="Avenir Next, PingFang SC, Noto Sans SC, sans-serif" font-weight="700">LunaeClaw</text>
+  <text x="320" y="178" fill="#bfd6f3" font-size="30" font-family="Avenir Next, PingFang SC, Noto Sans SC, sans-serif">Autonomous Runtime &amp; Control Hub</text>
+  <text x="320" y="220" fill="#93b6db" font-size="22" font-family="Avenir Next, PingFang SC, Noto Sans SC, sans-serif">Moon-born precision · Claw-sharp execution</text>
 </svg>

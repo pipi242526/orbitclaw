@@ -6,7 +6,7 @@ import re
 import shutil
 from pathlib import Path
 
-from orbitclaw.platform.utils.helpers import get_global_skills_path
+from lunaeclaw.platform.utils.helpers import get_global_skills_path
 
 # Default builtin skills directory (relative to this file)
 BUILTIN_SKILLS_DIR = Path(__file__).parent.parent / "skills"
@@ -183,8 +183,8 @@ class SkillsLoader:
         for env in requires.get("env", []):
             if not os.environ.get(env):
                 missing.append(f"ENV: {env}")
-        if requires.get("network") and os.environ.get("ORBITCLAW_OFFLINE") in {"1", "true", "yes"}:
-            missing.append("NETWORK: disabled (ORBITCLAW_OFFLINE)")
+        if requires.get("network") and os.environ.get("LUNAECLAW_OFFLINE") in {"1", "true", "yes"}:
+            missing.append("NETWORK: disabled (LUNAECLAW_OFFLINE)")
         return ", ".join(missing)
 
     def _get_skill_description(self, name: str) -> str:
@@ -203,10 +203,10 @@ class SkillsLoader:
         return content
 
     def _parse_nanobot_metadata(self, raw: str) -> dict:
-        """Parse skill metadata JSON from frontmatter (supports orbitclaw and openclaw keys)."""
+        """Parse skill metadata JSON from frontmatter (supports lunaeclaw and openclaw keys)."""
         try:
             data = json.loads(raw)
-            return data.get("orbitclaw", data.get("openclaw", {})) if isinstance(data, dict) else {}
+            return data.get("lunaeclaw", data.get("openclaw", {})) if isinstance(data, dict) else {}
         except (json.JSONDecodeError, TypeError):
             return {}
 
@@ -226,7 +226,7 @@ class SkillsLoader:
         return None
 
     def _frontmatter_to_skill_meta(self, frontmatter: dict | None) -> dict:
-        """Map simple frontmatter fields into orbitclaw skill metadata shape."""
+        """Map simple frontmatter fields into lunaeclaw skill metadata shape."""
         if not frontmatter:
             return {}
         skill_meta: dict = {}
@@ -273,12 +273,12 @@ class SkillsLoader:
         for env in requires.get("env", []):
             if not os.environ.get(env):
                 return False
-        if requires.get("network") and os.environ.get("ORBITCLAW_OFFLINE") in {"1", "true", "yes"}:
+        if requires.get("network") and os.environ.get("LUNAECLAW_OFFLINE") in {"1", "true", "yes"}:
             return False
         return True
 
     def _get_skill_meta(self, name: str) -> dict:
-        """Get orbitclaw metadata for a skill (cached in frontmatter)."""
+        """Get lunaeclaw metadata for a skill (cached in frontmatter)."""
         if name in self._skill_meta_cache:
             return self._skill_meta_cache[name]
         meta = self.get_skill_metadata(name) or {}

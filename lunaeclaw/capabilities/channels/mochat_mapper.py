@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from orbitclaw.capabilities.channels.mochat_types import MochatBufferedEntry, MochatTarget
+from lunaeclaw.capabilities.channels.mochat_types import MochatBufferedEntry, MochatTarget
 
 
 def resolve_mochat_target(raw: str) -> MochatTarget:

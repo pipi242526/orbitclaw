@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from orbitclaw.core.agent.loop import AgentLoop
+from lunaeclaw.core.agent.loop import AgentLoop
 
 
 def build_agent_loop(

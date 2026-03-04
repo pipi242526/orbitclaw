@@ -4,12 +4,12 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from orbitclaw.core.agent.turn_planner import collect_media_paths
-from orbitclaw.services.session.manager import Session
+from lunaeclaw.core.agent.turn_planner import collect_media_paths
+from lunaeclaw.services.session.manager import Session
 
 if TYPE_CHECKING:
-    from orbitclaw.core.bus.events import InboundMessage
-    from orbitclaw.services.session.manager import Session
+    from lunaeclaw.core.bus.events import InboundMessage
+    from lunaeclaw.services.session.manager import Session
 
 
 def get_or_create_session(loop: Any, *, session_key: str) -> "Session":

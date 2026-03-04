@@ -10,27 +10,27 @@ from typing import Any
 
 from loguru import logger
 
-from orbitclaw.capabilities.channels.base import BaseChannel
-from orbitclaw.capabilities.channels.feishu_cards import build_feishu_card_elements
-from orbitclaw.capabilities.channels.feishu_dedup import remember_feishu_message_id
-from orbitclaw.capabilities.channels.feishu_inbound import (
+from lunaeclaw.capabilities.channels.base import BaseChannel
+from lunaeclaw.capabilities.channels.feishu_cards import build_feishu_card_elements
+from lunaeclaw.capabilities.channels.feishu_dedup import remember_feishu_message_id
+from lunaeclaw.capabilities.channels.feishu_inbound import (
     parse_non_media_content,
     safe_parse_content_json,
 )
-from orbitclaw.capabilities.channels.feishu_media import (
+from lunaeclaw.capabilities.channels.feishu_media import (
     format_media_content_text,
     format_media_download_failed_text,
     resolve_download_filename,
     resolve_download_target,
     resolve_upload_file_type,
 )
-from orbitclaw.capabilities.channels.feishu_outbound import (
+from lunaeclaw.capabilities.channels.feishu_outbound import (
     classify_media_ext,
     resolve_receive_id_type,
 )
-from orbitclaw.core.bus.events import OutboundMessage
-from orbitclaw.core.bus.queue import MessageBus
-from orbitclaw.platform.config.schema import FeishuConfig
+from lunaeclaw.core.bus.events import OutboundMessage
+from lunaeclaw.core.bus.queue import MessageBus
+from lunaeclaw.platform.config.schema import FeishuConfig
 
 try:
     import lark_oapi as lark
@@ -289,7 +289,7 @@ class FeishuChannel(BaseChannel):
             (file_path, content_text) - file_path is None if download failed
         """
         loop = asyncio.get_running_loop()
-        from orbitclaw.platform.utils.helpers import get_media_dir
+        from lunaeclaw.platform.utils.helpers import get_media_dir
         media_dir = get_media_dir()
 
         data, filename = None, None

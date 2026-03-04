@@ -5,7 +5,7 @@ homepage: https://clawhub.ai
 category: tooling
 lang: en
 requires_network: true
-metadata: {"orbitclaw":{"emoji":"🦞"}}
+metadata: {"lunaeclaw":{"emoji":"🦞"}}
 ---
 
 # ClawHub
@@ -30,21 +30,21 @@ npx --yes clawhub@latest search "web scraping" --limit 5
 ## Install
 
 ```bash
-npx --yes clawhub@latest install <slug> --workdir ~/.orbitclaw/workspace
+npx --yes clawhub@latest install <slug> --workdir ~/.lunaeclaw/workspace
 ```
 
-Replace `<slug>` with the skill name from search results. This places the skill into `~/.orbitclaw/workspace/skills/`, where orbitclaw loads workspace skills from. Always include `--workdir`.
+Replace `<slug>` with the skill name from search results. This places the skill into `~/.lunaeclaw/workspace/skills/`, where lunaeclaw loads workspace skills from. Always include `--workdir`.
 
 ## Update
 
 ```bash
-npx --yes clawhub@latest update --all --workdir ~/.orbitclaw/workspace
+npx --yes clawhub@latest update --all --workdir ~/.lunaeclaw/workspace
 ```
 
 ## List installed
 
 ```bash
-npx --yes clawhub@latest list --workdir ~/.orbitclaw/workspace
+npx --yes clawhub@latest list --workdir ~/.lunaeclaw/workspace
 ```
 
 ## Notes
@@ -52,5 +52,5 @@ npx --yes clawhub@latest list --workdir ~/.orbitclaw/workspace
 - Requires Node.js (`npx` comes with it).
 - No API key needed for search and install.
 - Login (`npx --yes clawhub@latest login`) is only required for publishing.
-- `--workdir ~/.orbitclaw/workspace` is critical — without it, skills install to the current directory instead of the orbitclaw workspace.
+- `--workdir ~/.lunaeclaw/workspace` is critical — without it, skills install to the current directory instead of the lunaeclaw workspace.
 - After install, remind the user to start a new session to load the skill.

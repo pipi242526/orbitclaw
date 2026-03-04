@@ -58,7 +58,7 @@ export class WhatsAppClient {
       version,
       logger,
       printQRInTerminal: false,
-      browser: ['orbitclaw', 'cli', VERSION],
+      browser: ['lunaeclaw', 'cli', VERSION],
       syncFullHistory: false,
       markOnlineOnConnect: false,
     });

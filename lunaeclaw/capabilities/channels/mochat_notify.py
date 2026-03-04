@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from orbitclaw.capabilities.channels.mochat_helpers import make_synthetic_event, str_field
+from lunaeclaw.capabilities.channels.mochat_helpers import make_synthetic_event, str_field
 
 
 def build_panel_notify_event(payload: Any, *, panel_set: set[str]) -> tuple[str, dict[str, Any]] | None:

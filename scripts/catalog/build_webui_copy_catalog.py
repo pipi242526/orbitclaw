@@ -7,8 +7,8 @@ import ast
 import hashlib
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[1]
-WEBUI_DIR = ROOT / "orbitclaw" / "app" / "webui"
+ROOT = Path(__file__).resolve().parents[2]
+WEBUI_DIR = ROOT / "lunaeclaw" / "app" / "webui"
 OUT = WEBUI_DIR / "copy_catalog.py"
 
 

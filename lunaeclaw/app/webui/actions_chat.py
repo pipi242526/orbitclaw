@@ -6,9 +6,9 @@ import asyncio
 import re
 from typing import Any
 
-from orbitclaw.app.cli.runtime_wiring import build_agent_loop, make_provider
-from orbitclaw.core.bus.queue import MessageBus
-from orbitclaw.services.session.manager import SessionManager
+from lunaeclaw.app.cli.runtime_wiring import build_agent_loop, make_provider
+from lunaeclaw.core.bus.queue import MessageBus
+from lunaeclaw.services.session.manager import SessionManager
 
 
 def _normalize_chat_session_id(raw: str) -> str:

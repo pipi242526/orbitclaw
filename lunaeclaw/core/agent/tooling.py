@@ -63,7 +63,7 @@ def truncate_tool_output(
     tool_name: str,
     *,
     limit: int,
-    source_label: str = "orbitclaw",
+    source_label: str = "lunaeclaw",
 ) -> Any:
     """Keep tool output bounded to reduce context/token blowup in long runs."""
     if not isinstance(result, str):

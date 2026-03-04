@@ -11,25 +11,25 @@ from typing import Any
 import typer
 from rich.console import Console
 
-from orbitclaw.capabilities.channels.manager import ChannelManager
-from orbitclaw.core.agent.orchestrator import build_agent_loop as _build_agent_loop
-from orbitclaw.core.bus.events import OutboundMessage
-from orbitclaw.core.bus.queue import MessageBus
-from orbitclaw.platform.config.schema import Config
-from orbitclaw.services.cron.service import CronService
-from orbitclaw.services.cron.types import CronJob
-from orbitclaw.services.heartbeat.service import HeartbeatService
-from orbitclaw.services.session.manager import SessionManager
+from lunaeclaw.capabilities.channels.manager import ChannelManager
+from lunaeclaw.core.agent.orchestrator import build_agent_loop as _build_agent_loop
+from lunaeclaw.core.bus.events import OutboundMessage
+from lunaeclaw.core.bus.queue import MessageBus
+from lunaeclaw.platform.config.schema import Config
+from lunaeclaw.services.cron.service import CronService
+from lunaeclaw.services.cron.types import CronJob
+from lunaeclaw.services.heartbeat.service import HeartbeatService
+from lunaeclaw.services.session.manager import SessionManager
 
 _console = Console()
 
 
 def make_single_provider(config: Config, model: str):
     """Create a provider for a concrete model (non-endpoint-routed path)."""
-    from orbitclaw.platform.providers.custom_provider import CustomProvider
-    from orbitclaw.platform.providers.litellm_provider import LiteLLMProvider
-    from orbitclaw.platform.providers.openai_codex_provider import OpenAICodexProvider
-    from orbitclaw.platform.providers.registry import find_by_name
+    from lunaeclaw.platform.providers.custom_provider import CustomProvider
+    from lunaeclaw.platform.providers.litellm_provider import LiteLLMProvider
+    from lunaeclaw.platform.providers.openai_codex_provider import OpenAICodexProvider
+    from lunaeclaw.platform.providers.registry import find_by_name
 
     provider_name = config.get_provider_name(model)
     p = config.get_provider(model)
@@ -47,7 +47,7 @@ def make_single_provider(config: Config, model: str):
     spec = find_by_name(provider_name)
     if not model.startswith("bedrock/") and not (p and p.api_key) and not (spec and spec.is_oauth):
         _console.print("[red]Error: No API key configured.[/red]")
-        _console.print("Set one in ~/.orbitclaw/config.json under providers section")
+        _console.print("Set one in ~/.lunaeclaw/config.json under providers section")
         raise typer.Exit(1)
 
     return LiteLLMProvider(
@@ -63,7 +63,7 @@ def make_provider(config: Config):
     """Create provider from config; supports endpoint router mode."""
     model = config.agents.defaults.model
     if config.providers.endpoints:
-        from orbitclaw.platform.providers.router_provider import RouterProvider
+        from lunaeclaw.platform.providers.router_provider import RouterProvider
 
         return RouterProvider(
             default_model=model,
@@ -104,7 +104,7 @@ class GatewayRuntimeState:
 
 
 def gateway_reload_poll_seconds() -> float:
-    raw = (os.environ.get("ORBITCLAW_GATEWAY_RELOAD_POLL_SECONDS") or "2.0").strip()
+    raw = (os.environ.get("LUNAECLAW_GATEWAY_RELOAD_POLL_SECONDS") or "2.0").strip()
     try:
         value = float(raw)
     except ValueError:
@@ -175,8 +175,8 @@ async def start_gateway_runtime(config: Config, *, data_dir: Path) -> GatewayRun
 
     await cron.start()
     await heartbeat.start()
-    agent_task = asyncio.create_task(agent.run(), name="orbitclaw.core.agent.run")
-    channels_task = asyncio.create_task(channels.start_all(), name="orbitclaw.capabilities.channels.start_all")
+    agent_task = asyncio.create_task(agent.run(), name="lunaeclaw.core.agent.run")
+    channels_task = asyncio.create_task(channels.start_all(), name="lunaeclaw.capabilities.channels.start_all")
 
     return GatewayRuntimeState(
         config=config,

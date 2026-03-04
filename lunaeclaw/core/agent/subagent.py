@@ -11,11 +11,11 @@ from typing import TYPE_CHECKING, Any
 
 from loguru import logger
 
-from orbitclaw.capabilities.tools.registry import ToolRegistry
-from orbitclaw.capabilities.tools.web import (
+from lunaeclaw.capabilities.tools.registry import ToolRegistry
+from lunaeclaw.capabilities.tools.web import (
     has_exa_search_mcp,
 )
-from orbitclaw.core.agent.tooling import (
+from lunaeclaw.core.agent.tooling import (
     is_mcp_server_enabled,
     normalize_name_set,
     normalize_tool_aliases,
@@ -23,13 +23,13 @@ from orbitclaw.core.agent.tooling import (
     should_try_exa_mcp_search,
     truncate_tool_output,
 )
-from orbitclaw.core.agent.toolset_builder import ToolsetBuilder
-from orbitclaw.core.bus.events import InboundMessage
-from orbitclaw.core.bus.queue import MessageBus
-from orbitclaw.platform.providers.base import LLMProvider
+from lunaeclaw.core.agent.toolset_builder import ToolsetBuilder
+from lunaeclaw.core.bus.events import InboundMessage
+from lunaeclaw.core.bus.queue import MessageBus
+from lunaeclaw.platform.providers.base import LLMProvider
 
 if TYPE_CHECKING:
-    from orbitclaw.platform.config.schema import ExecToolConfig
+    from lunaeclaw.platform.config.schema import ExecToolConfig
 
 
 class SubagentManager:
@@ -168,7 +168,7 @@ class SubagentManager:
                 self._apply_configured_tool_aliases(tools, stage="startup")
 
                 if self._mcp_servers:
-                    from orbitclaw.capabilities.tools.mcp import connect_mcp_servers
+                    from lunaeclaw.capabilities.tools.mcp import connect_mcp_servers
                     await connect_mcp_servers(
                         self._mcp_servers,
                         tools,
@@ -237,7 +237,7 @@ class SubagentManager:
                                 result,
                                 tool_call.name,
                                 limit=self._TOOL_RESULT_MAX_CHARS,
-                                source_label="orbitclaw subagent",
+                                source_label="lunaeclaw subagent",
                             )
                             messages.append({
                                 "role": "tool",

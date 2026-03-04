@@ -5,7 +5,7 @@ The following paths are intended for GitHub publication:
 - `.github/`
 - `assets/`
 - `bridge/`
-- `orbitclaw/`
+- `lunaeclaw/`
 - `scripts/`
 - `docs/public/`
 - `tests/public/`

@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 
-from orbitclaw.platform.config.schema import EndpointProviderConfig
-from orbitclaw.platform.providers.registry import find_by_name
+from lunaeclaw.platform.config.schema import EndpointProviderConfig
+from lunaeclaw.platform.providers.registry import find_by_name
 
 ENDPOINT_TYPE_ALIASES = {
     "openai-compatible": "openai_compatible",

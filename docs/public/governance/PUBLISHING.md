@@ -4,7 +4,7 @@ This repository is intended to publish only reusable runtime code and selected p
 
 ## Keep in GitHub
 
-- Runtime code under `orbitclaw/`
+- Runtime code under `lunaeclaw/`
 - Public docs (`README*`, `docs/public/`, `SECURITY*`, `LICENSE`, `NOTICE`)
 - CI/release files (`.github/`, `scripts/`, `release/lint-baseline.txt`)
 - Minimal public tests under `tests/public/`

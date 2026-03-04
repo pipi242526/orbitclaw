@@ -9,8 +9,8 @@ from pathlib import Path
 
 from rich.console import Console
 
-from orbitclaw.platform.config.presets import apply_recommended_tool_defaults
-from orbitclaw.platform.config.schema import Config
+from lunaeclaw.platform.config.presets import apply_recommended_tool_defaults
+from lunaeclaw.platform.config.schema import Config
 
 
 def apply_cli_recommended_tool_defaults(config: Config) -> None:

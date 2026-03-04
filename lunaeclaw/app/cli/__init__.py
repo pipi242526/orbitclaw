@@ -1,1 +1,1 @@
-"""CLI module for orbitclaw."""
+"""CLI module for lunaeclaw."""

@@ -6,7 +6,7 @@ category: utility
 lang: en
 requires_cli: curl
 requires_network: true
-metadata: {"orbitclaw":{"emoji":"🌤️","requires":{"bins":["curl"]}}}
+metadata: {"lunaeclaw":{"emoji":"🌤️","requires":{"bins":["curl"]}}}
 ---
 
 # Weather

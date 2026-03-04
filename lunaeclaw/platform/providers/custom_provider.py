@@ -7,7 +7,7 @@ from typing import Any
 import json_repair
 from openai import AsyncOpenAI
 
-from orbitclaw.platform.providers.base import LLMProvider, LLMResponse, ToolCallRequest
+from lunaeclaw.platform.providers.base import LLMProvider, LLMResponse, ToolCallRequest
 
 
 class CustomProvider(LLMProvider):

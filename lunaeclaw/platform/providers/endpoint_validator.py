@@ -6,8 +6,8 @@ import json
 import urllib.request
 from dataclasses import dataclass
 
-from orbitclaw.platform.config.schema import Config
-from orbitclaw.platform.providers.resolver import LITELLM_ENDPOINT_TYPES, normalize_endpoint_type
+from lunaeclaw.platform.config.schema import Config
+from lunaeclaw.platform.providers.resolver import LITELLM_ENDPOINT_TYPES, normalize_endpoint_type
 
 SUPPORTED_ENDPOINT_TYPES: set[str] = {"openai_compatible", *LITELLM_ENDPOINT_TYPES}
 
@@ -72,7 +72,7 @@ def validate_default_model_reference(
     if not endpoint_cfg.api_base:
         return False, f"endpoint '{endpoint_name}' has empty api_base"
 
-    headers: dict[str, str] = {"Accept": "application/json", "User-Agent": "orbitclaw-webui/0.1"}
+    headers: dict[str, str] = {"Accept": "application/json", "User-Agent": "lunaeclaw-webui/0.1"}
     if endpoint_cfg.api_key:
         headers["Authorization"] = f"Bearer {endpoint_cfg.api_key}"
     if endpoint_cfg.extra_headers:
@@ -153,7 +153,7 @@ def collect_default_model_endpoint_findings(config: Config) -> list[EndpointDiag
             EndpointDiagnosticFinding(
                 severity="warn",
                 problem=f"providers.endpoints.{endpoint_name}.apiKey contains an unresolved ${'{'}ENV_VAR{'}'} placeholder",
-                fix="Check ~/.orbitclaw/.env or ~/.orbitclaw/env/*.env and ensure the referenced variable exists.",
+                fix="Check ~/.lunaeclaw/.env or ~/.lunaeclaw/env/*.env and ensure the referenced variable exists.",
             )
         )
 

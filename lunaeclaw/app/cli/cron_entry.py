@@ -12,11 +12,11 @@ from loguru import logger
 from rich.console import Console
 from rich.table import Table
 
-from orbitclaw.app.cli.runtime_wiring import build_agent_loop, make_provider
-from orbitclaw.core.bus.queue import MessageBus
-from orbitclaw.platform.config.loader import get_data_dir, load_config
-from orbitclaw.services.cron.service import CronService
-from orbitclaw.services.cron.types import CronJob, CronSchedule
+from lunaeclaw.app.cli.runtime_wiring import build_agent_loop, make_provider
+from lunaeclaw.core.bus.queue import MessageBus
+from lunaeclaw.platform.config.loader import get_data_dir, load_config
+from lunaeclaw.services.cron.service import CronService
+from lunaeclaw.services.cron.types import CronJob, CronSchedule
 
 
 def cron_list_command(*, all_jobs: bool, console: Console) -> None:
@@ -132,7 +132,7 @@ def cron_run_command(
     console: Console,
     print_agent_response,
 ) -> None:
-    logger.disable("orbitclaw")
+    logger.disable("lunaeclaw")
 
     config = load_config()
     provider = make_provider(config)

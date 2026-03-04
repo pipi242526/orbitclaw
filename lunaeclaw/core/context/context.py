@@ -5,38 +5,38 @@ import time
 from pathlib import Path
 from typing import Any
 
-from orbitclaw.core.context.memory import MemoryStore
-from orbitclaw.core.context.message_payload import (
+from lunaeclaw.core.context.memory import MemoryStore
+from lunaeclaw.core.context.message_payload import (
     append_runtime_context as _append_runtime_context_impl,
 )
-from orbitclaw.core.context.message_payload import (
+from lunaeclaw.core.context.message_payload import (
     build_user_content as _build_user_content_impl,
 )
-from orbitclaw.core.context.message_payload import (
+from lunaeclaw.core.context.message_payload import (
     estimate_message_chars as _estimate_message_chars_impl,
 )
-from orbitclaw.core.context.message_payload import (
+from lunaeclaw.core.context.message_payload import (
     trim_history_by_chars as _trim_history_by_chars_impl,
 )
-from orbitclaw.core.context.runtime_hints import (
+from lunaeclaw.core.context.runtime_hints import (
     build_runtime_context as _build_runtime_context_impl,
 )
-from orbitclaw.core.context.runtime_hints import (
+from lunaeclaw.core.context.runtime_hints import (
     build_runtime_summary as _build_runtime_summary_impl,
 )
-from orbitclaw.core.context.runtime_hints import (
+from lunaeclaw.core.context.runtime_hints import (
     detect_reply_language as _detect_reply_language_impl,
 )
-from orbitclaw.core.context.runtime_hints import (
+from lunaeclaw.core.context.runtime_hints import (
     detect_runtime_environment as _detect_runtime_environment_impl,
 )
-from orbitclaw.core.context.runtime_hints import (
+from lunaeclaw.core.context.runtime_hints import (
     detect_search_locale_hint as _detect_search_locale_hint_impl,
 )
-from orbitclaw.core.context.runtime_hints import (
+from lunaeclaw.core.context.runtime_hints import (
     normalize_language_code as _normalize_language_code_impl,
 )
-from orbitclaw.core.context.skills import SkillsLoader
+from lunaeclaw.core.context.skills import SkillsLoader
 
 
 class ContextBuilder:
@@ -169,7 +169,7 @@ Skills with available="false" need dependencies installed first - you can try in
         if budget_chars <= 0 or len(text) <= budget_chars:
             return text
         omitted = len(text) - budget_chars
-        tail = f"\n\n[... {label} truncated by orbitclaw: {omitted} chars omitted for token control ...]"
+        tail = f"\n\n[... {label} truncated by lunaeclaw: {omitted} chars omitted for token control ...]"
         keep = max(0, budget_chars - len(tail))
         return text[:keep] + tail
 
@@ -226,13 +226,13 @@ Skills with available="false" need dependencies installed first - you can try in
     def _get_identity(self) -> str:
         """Get the core identity section."""
         workspace_path = str(self.workspace.expanduser().resolve())
-        from orbitclaw.platform.utils.helpers import get_global_skills_path
+        from lunaeclaw.platform.utils.helpers import get_global_skills_path
         global_skills_path = str(get_global_skills_path())
         runtime = self._build_runtime_summary()
 
-        return f"""# orbitclaw 🐈
+        return f"""# lunaeclaw 🐈
 
-You are orbitclaw, a helpful AI assistant.
+You are lunaeclaw, a helpful AI assistant.
 
 ## Runtime
 {runtime}
@@ -285,7 +285,7 @@ To recall past events, grep {workspace_path}/memory/HISTORY.md"""
         dockerenv_exists: bool | None = None,
         cgroup_text: str | None = None,
     ) -> tuple[str, str]:
-        """Detect whether orbitclaw runs in host or container-like environment."""
+        """Detect whether lunaeclaw runs in host or container-like environment."""
         return _detect_runtime_environment_impl(
             override=override,
             dockerenv_exists=dockerenv_exists,

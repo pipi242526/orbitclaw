@@ -5,11 +5,11 @@ from __future__ import annotations
 import re
 from typing import TYPE_CHECKING, Callable
 
-from orbitclaw.core.policy.language_guard import enforce_reply_language
+from lunaeclaw.core.policy.language_guard import enforce_reply_language
 
 if TYPE_CHECKING:
-    from orbitclaw.core.context.context import ContextBuilder
-    from orbitclaw.platform.providers.base import LLMProvider
+    from lunaeclaw.core.context.context import ContextBuilder
+    from lunaeclaw.platform.providers.base import LLMProvider
 
 
 class PolicyPipeline:
@@ -17,7 +17,7 @@ class PolicyPipeline:
     _BOX_DRAWING_LINE_RE = re.compile(r"^[\s╭╮╰╯│─▄▀█]+$")
     _TOOL_TRACE_LINE_PATTERNS: tuple[re.Pattern[str], ...] = (
         re.compile(r"^\s*↳\s+"),
-        re.compile(r"^\s*🐈\s*orbitclaw\s*$", re.IGNORECASE),
+        re.compile(r"^\s*🐈\s*lunaeclaw\s*$", re.IGNORECASE),
         re.compile(r"^\s*calling\s+[\w./-]+\s+function\s+with\s+parameters", re.IGNORECASE),
         re.compile(r"^\s*(?:i\s+will|i['’]ll|i\s+am\s+going\s+to)\s+(?:call|use)\s+[\w./-]+\s*(?:tool|function)?", re.IGNORECASE),
         re.compile(r"^\s*(?:我将|我会|我现在会|我准备)(?:调用|使用).*(?:工具|函数|function|tool)?"),
@@ -138,7 +138,7 @@ class PolicyPipeline:
         user_message: str | None = None,
     ) -> str:
         zh = self.localize(en="en", zh_cn="zh", user_message=user_message) == "zh"
-        title = "🐈 orbitclaw 命令：" if zh else "🐈 orbitclaw commands:"
+        title = "🐈 lunaeclaw 命令：" if zh else "🐈 lunaeclaw commands:"
         rows = [title]
         for name, en_desc, zh_desc in command_specs:
             rows.append(f"/{name} — {zh_desc if zh else en_desc}")
@@ -329,8 +329,8 @@ class PolicyPipeline:
         else:
             fixes.extend([
                 t(
-                    "Run `orbitclaw doctor` to inspect tool/skill dependency and config issues.",
-                    "运行 `orbitclaw doctor` 查看工具/技能依赖和配置问题。",
+                    "Run `lunaeclaw doctor` to inspect tool/skill dependency and config issues.",
+                    "运行 `lunaeclaw doctor` 查看工具/技能依赖和配置问题。",
                 ),
                 t("Check MCP config, API keys, and model names.", "检查 MCP 配置、API Key、模型名是否正确。"),
             ])

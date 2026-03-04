@@ -3,7 +3,7 @@ set -euo pipefail
 
 SERVER_HOST="${SERVER_HOST:-}"
 SERVER_USER="${SERVER_USER:-root}"
-SERVER_DIR="${SERVER_DIR:-/root/OrbitClaw}"
+SERVER_DIR="${SERVER_DIR:-/root/LunaeClaw}"
 VERIFY_WEBUI="${VERIFY_WEBUI:-1}"
 
 if [[ -z "${SERVER_HOST}" ]]; then
@@ -32,13 +32,13 @@ fi
 cd "${REPO_DIR}"
 
 echo "[verify-server] docker compose status check"
-docker compose run --rm orbitclaw-cli status
+docker compose run --rm lunaeclaw-cli status
 
 if [[ "${VERIFY_WEBUI}" == "1" ]]; then
   echo "[verify-server] webui health check"
-  docker compose --profile webui up -d orbitclaw-webui
+  docker compose --profile webui up -d lunaeclaw-webui
 
-  TOKEN="$(docker compose exec -T orbitclaw-webui sh -lc 'cat /root/.orbitclaw/webui.path-token 2>/dev/null || cat /root/.orbitclaw/webui.path_token 2>/dev/null || true' | tr -d '\r\n')"
+  TOKEN="$(docker compose exec -T lunaeclaw-webui sh -lc 'cat /root/.lunaeclaw/webui.path-token 2>/dev/null || cat /root/.lunaeclaw/webui.path_token 2>/dev/null || true' | tr -d '\r\n')"
   if [[ -z "${TOKEN}" ]]; then
     echo "[verify-server] webui path token not found"
     exit 1

@@ -1,4 +1,4 @@
-"""MCP client: connects to MCP servers and wraps their tools as native orbitclaw tools."""
+"""MCP client: connects to MCP servers and wraps their tools as native lunaeclaw tools."""
 
 import asyncio
 import os
@@ -8,9 +8,9 @@ from typing import Any
 import httpx
 from loguru import logger
 
-from orbitclaw.capabilities.tools.base import Tool
-from orbitclaw.capabilities.tools.registry import ToolRegistry
-from orbitclaw.platform.utils.helpers import (
+from lunaeclaw.capabilities.tools.base import Tool
+from lunaeclaw.capabilities.tools.registry import ToolRegistry
+from lunaeclaw.platform.utils.helpers import (
     get_data_path,
     get_mcp_bin_dir,
     get_mcp_data_dir,
@@ -19,7 +19,7 @@ from orbitclaw.platform.utils.helpers import (
 
 
 class MCPToolWrapper(Tool):
-    """Wraps a single MCP server tool as a orbitclaw Tool."""
+    """Wraps a single MCP server tool as a lunaeclaw Tool."""
 
     def __init__(self, session, server_name: str, tool_def, tool_timeout: int = 30):
         self._session = session
@@ -88,17 +88,17 @@ async def connect_mcp_servers(
         try:
             if cfg.command:
                 merged_env = dict(cfg.env or {})
-                merged_env.setdefault("ORBITCLAW_MCP_HOME", str(mcp_home))
-                merged_env.setdefault("ORBITCLAW_MCP_BIN", str(mcp_bin))
-                merged_env.setdefault("ORBITCLAW_MCP_DATA", str(mcp_data))
+                merged_env.setdefault("LUNAECLAW_MCP_HOME", str(mcp_home))
+                merged_env.setdefault("LUNAECLAW_MCP_BIN", str(mcp_bin))
+                merged_env.setdefault("LUNAECLAW_MCP_DATA", str(mcp_data))
                 # Make locally installed wrappers/scripts discoverable by stdio MCP servers.
                 current_path = merged_env.get("PATH") or os.environ.get("PATH", "")
                 merged_env["PATH"] = (
                     f"{mcp_bin}{os.pathsep + current_path if current_path else ''}"
                 )
                 # AWS document-loader MCP restricts file access to cwd by default.
-                # Expand base directory to ~/.orbitclaw so it can read downloaded attachments
-                # in ~/.orbitclaw/media and workspace files in ~/.orbitclaw/workspace.
+                # Expand base directory to ~/.lunaeclaw so it can read downloaded attachments
+                # in ~/.lunaeclaw/media and workspace files in ~/.lunaeclaw/workspace.
                 (cfg.command or "").lower()
                 args_joined = " ".join(str(a).lower() for a in (cfg.args or []))
                 if lname == "docloader" or "document-loader-mcp-server" in args_joined or "document_loader_mcp_server" in args_joined:

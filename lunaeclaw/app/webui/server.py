@@ -1,4 +1,4 @@
-"""Minimal local web UI for managing orbitclaw config."""
+"""Minimal local web UI for managing lunaeclaw config."""
 
 from __future__ import annotations
 
@@ -13,44 +13,44 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import parse_qs, urlencode, urlparse
 
-from orbitclaw.app.gateway.control import (
+from lunaeclaw.app.gateway.control import (
     get_gateway_runtime_state_path as _get_gateway_runtime_state_path,
 )
-from orbitclaw.app.webui import post_actions as _post_actions
-from orbitclaw.app.webui import views as _views
-from orbitclaw.app.webui.diagnostics import (
+from lunaeclaw.app.webui import post_actions as _post_actions
+from lunaeclaw.app.webui import views as _views
+from lunaeclaw.app.webui.diagnostics import (
     collect_channel_runtime_issues as _collect_channel_runtime_issues_impl,
 )
-from orbitclaw.app.webui.diagnostics import (
+from lunaeclaw.app.webui.diagnostics import (
     collect_tool_policy_diagnostics as _collect_tool_policy_diagnostics_impl,
 )
-from orbitclaw.app.webui.handlers import dispatch_post_route as _dispatch_post_route
-from orbitclaw.app.webui.i18n import (
+from lunaeclaw.app.webui.handlers import dispatch_post_route as _dispatch_post_route
+from lunaeclaw.app.webui.i18n import (
     UI_LANGUAGE_CHOICES as _UI_LANGUAGE_CHOICES,
 )
-from orbitclaw.app.webui.i18n import (
+from lunaeclaw.app.webui.i18n import (
     normalize_ui_lang as _normalize_ui_lang,
 )
-from orbitclaw.app.webui.i18n import (
+from lunaeclaw.app.webui.i18n import (
     tr as _tr,
 )
-from orbitclaw.app.webui.i18n import (
+from lunaeclaw.app.webui.i18n import (
     ui_text as _ui_text,
 )
-from orbitclaw.app.webui.icons import icon_svg
-from orbitclaw.app.webui.layout import render_page_shell as _render_page_shell
-from orbitclaw.app.webui.routes import dispatch_get_route as _dispatch_get_route
-from orbitclaw.app.webui.services import (
+from lunaeclaw.app.webui.icons import icon_svg
+from lunaeclaw.app.webui.layout import render_page_shell as _render_page_shell
+from lunaeclaw.app.webui.routes import dispatch_get_route as _dispatch_get_route
+from lunaeclaw.app.webui.services import (
     configure_runtime_trend_store as _configure_runtime_trend_store,
 )
-from orbitclaw.app.webui.services import (
+from lunaeclaw.app.webui.services import (
     evaluate_gateway_runtime_status as _evaluate_gateway_runtime_status,
 )
-from orbitclaw.app.webui.services import (
+from lunaeclaw.app.webui.services import (
     runtime_trend_persist_hours_from_env as _runtime_trend_persist_hours_from_env,
 )
-from orbitclaw.platform.config.loader import get_config_path, load_config, save_config
-from orbitclaw.platform.config.schema import Config
+from lunaeclaw.platform.config.loader import get_config_path, load_config, save_config
+from lunaeclaw.platform.config.schema import Config
 
 
 def _collect_channel_runtime_issues(raw_cfg: Config, resolved_cfg: Config, ui_lang: str) -> list[str]:
@@ -69,7 +69,7 @@ def run_webui(
     open_browser: bool = False,
     path_token: str | None = None,
 ) -> None:
-    """Start the local orbitclaw web UI."""
+    """Start the local lunaeclaw web UI."""
     cfg_path = (config_path or get_config_path()).expanduser()
     path_token = (path_token or "").strip()
     token_path = cfg_path.parent / "webui.path-token"
@@ -114,7 +114,7 @@ def run_webui(
         return _evaluate_gateway_runtime_status(cfg_path)
 
     class Handler(BaseHTTPRequestHandler):
-        server_version = "orbitclaw-webui/0.1"
+        server_version = "lunaeclaw-webui/0.1"
         _ui_lang = "en"
 
         def log_message(self, format: str, *args: Any) -> None:  # noqa: A003
@@ -404,7 +404,7 @@ def run_webui(
     public_host = "127.0.0.1" if host == "0.0.0.0" else host
     root_url = f"http://{public_host}:{port}/"
     access_url = f"http://{public_host}:{port}{path_prefix}/"
-    print(f"OrbitClaw Console listening on {root_url}")
+    print(f"LunaeClaw Control Hub listening on {root_url}")
     print(f"Web UI access path (required): {path_prefix}/")
     print(f"Open Web UI at: {access_url}")
     if trend_persist_hours > 0:
@@ -418,7 +418,7 @@ def run_webui(
         print("Gateway runtime check: OK (same data dir, alive)")
     else:
         print(f"Gateway runtime check: NOT READY ({_reason_en})")
-        print("Tip: start gateway with the same ORBITCLAW_DATA_DIR/config directory.")
+        print("Tip: start gateway with the same LUNAECLAW_DATA_DIR/config directory.")
     if host not in {"127.0.0.1", "localhost"}:
         print(_ui_text("en", "warn_not_localhost"))
     if open_browser:

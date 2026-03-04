@@ -1,4 +1,4 @@
-"""CLI commands for orbitclaw."""
+"""CLI commands for lunaeclaw."""
 
 import os
 import select
@@ -14,37 +14,37 @@ from rich.console import Console
 from rich.markdown import Markdown
 from rich.text import Text
 
-from orbitclaw import __logo__, __version__
-from orbitclaw.app.cli.agent_entry import run_agent_command
-from orbitclaw.app.cli.bootstrap_helpers import (
+from lunaeclaw import __logo__, __version__
+from lunaeclaw.app.cli.agent_entry import run_agent_command
+from lunaeclaw.app.cli.bootstrap_helpers import (
     apply_cli_recommended_tool_defaults as _apply_cli_recommended_tool_defaults,
 )
-from orbitclaw.app.cli.bootstrap_helpers import (
+from lunaeclaw.app.cli.bootstrap_helpers import (
     ensure_claude_code_runtime_dependencies as _ensure_claude_code_runtime_dependencies,
 )
-from orbitclaw.app.cli.channels_entry import (
+from lunaeclaw.app.cli.channels_entry import (
     channels_login_command,
     channels_status_command,
 )
-from orbitclaw.app.cli.cron_entry import (
+from lunaeclaw.app.cli.cron_entry import (
     cron_add_command,
     cron_enable_command,
     cron_list_command,
     cron_remove_command,
     cron_run_command,
 )
-from orbitclaw.app.cli.gateway_entry import gateway_command
-from orbitclaw.app.cli.provider_entry import provider_login_command
-from orbitclaw.app.cli.setup_entry import (
+from lunaeclaw.app.cli.gateway_entry import gateway_command
+from lunaeclaw.app.cli.provider_entry import provider_login_command
+from lunaeclaw.app.cli.setup_entry import (
     bootstrap_runtime_for_webui as _bootstrap_runtime_for_webui,
 )
-from orbitclaw.app.cli.setup_entry import (
+from lunaeclaw.app.cli.setup_entry import (
     onboard_command,
 )
 
 app = typer.Typer(
-    name="orbitclaw",
-    help=f"{__logo__} orbitclaw - Personal AI Assistant",
+    name="lunaeclaw",
+    help=f"{__logo__} lunaeclaw - Personal AI Assistant",
     no_args_is_help=True,
 )
 
@@ -108,7 +108,7 @@ def _init_prompt_session() -> None:
     except Exception:
         pass
 
-    from orbitclaw.platform.utils.helpers import get_cli_history_file
+    from lunaeclaw.platform.utils.helpers import get_cli_history_file
     history_file = get_cli_history_file()
 
     _PROMPT_SESSION = PromptSession(
@@ -123,7 +123,7 @@ def _print_agent_response(response: str, render_markdown: bool) -> None:
     content = response or ""
     body = Markdown(content) if render_markdown else Text(content)
     console.print()
-    console.print(f"[cyan]{__logo__} orbitclaw[/cyan]")
+    console.print(f"[cyan]{__logo__} lunaeclaw[/cyan]")
     console.print(body)
     console.print()
 
@@ -155,7 +155,7 @@ async def _read_interactive_input_async() -> str:
 
 def version_callback(value: bool):
     if value:
-        console.print(f"{__logo__} orbitclaw v{__version__}")
+        console.print(f"{__logo__} lunaeclaw v{__version__}")
         raise typer.Exit()
 
 
@@ -165,7 +165,7 @@ def main(
         None, "--version", "-v", callback=version_callback, is_eager=True
     ),
 ):
-    """orbitclaw - Personal AI Assistant."""
+    """lunaeclaw - Personal AI Assistant."""
     pass
 
 
@@ -176,7 +176,7 @@ def main(
 
 @app.command()
 def onboard():
-    """Initialize orbitclaw configuration and workspace."""
+    """Initialize lunaeclaw configuration and workspace."""
     onboard_command(
         console=console,
         logo=__logo__,
@@ -194,7 +194,7 @@ def gateway(
     port: int = typer.Option(18790, "--port", "-p", help="Gateway port"),
     verbose: bool = typer.Option(False, "--verbose", "-v", help="Verbose output"),
 ):
-    """Start the orbitclaw gateway."""
+    """Start the lunaeclaw gateway."""
     gateway_command(
         port=port,
         verbose=verbose,
@@ -218,7 +218,7 @@ def agent(
     message: str = typer.Option(None, "--message", "-m", help="Message to send to the agent"),
     session_id: str = typer.Option("cli:direct", "--session", "-s", help="Session ID"),
     markdown: bool = typer.Option(True, "--markdown/--no-markdown", help="Render assistant output as Markdown"),
-    logs: bool = typer.Option(False, "--logs/--no-logs", help="Show orbitclaw runtime logs during chat"),
+    logs: bool = typer.Option(False, "--logs/--no-logs", help="Show lunaeclaw runtime logs during chat"),
 ):
     """Interact with the agent directly."""
     run_agent_command(
@@ -343,8 +343,8 @@ def cron_run(
 
 @app.command()
 def status():
-    """Show orbitclaw status."""
-    from orbitclaw.app.cli.diagnostics_commands import run_status
+    """Show lunaeclaw status."""
+    from lunaeclaw.app.cli.diagnostics_commands import run_status
 
     run_status(console, __logo__)
 
@@ -352,7 +352,7 @@ def status():
 @app.command()
 def doctor():
     """Diagnose configuration/tooling issues and suggest fixes."""
-    from orbitclaw.app.cli.diagnostics_commands import run_doctor
+    from lunaeclaw.app.cli.diagnostics_commands import run_doctor
 
     run_doctor(console, __logo__)
 
@@ -366,12 +366,12 @@ def webui(
     path_token: str | None = typer.Option(
         None,
         "--path-token",
-        help="Optional Web UI path token (URL secret suffix, no login popup). Can also use ORBITCLAW_WEBUI_PATH_TOKEN.",
-        envvar="ORBITCLAW_WEBUI_PATH_TOKEN",
+        help="Optional Web UI path token (URL secret suffix, no login popup). Can also use LUNAECLAW_WEBUI_PATH_TOKEN.",
+        envvar="LUNAECLAW_WEBUI_PATH_TOKEN",
     ),
 ):
     """Run a lightweight local web UI for config / MCP / skills / channels management."""
-    from orbitclaw.app.webui.server import run_webui
+    from lunaeclaw.app.webui.server import run_webui
 
     _bootstrap_runtime_for_webui(
         config_path,

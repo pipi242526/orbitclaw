@@ -4,11 +4,11 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any, Awaitable, Callable
 
-from orbitclaw.core.bus.events import OutboundMessage
+from lunaeclaw.core.bus.events import OutboundMessage
 
 if TYPE_CHECKING:
-    from orbitclaw.core.bus.events import InboundMessage
-    from orbitclaw.core.bus.queue import MessageBus
+    from lunaeclaw.core.bus.events import InboundMessage
+    from lunaeclaw.core.bus.queue import MessageBus
 
 
 def resolve_reply_to(metadata: dict[str, Any] | None) -> str | None:

@@ -5,4 +5,4 @@
 - 公开文档：`docs/public/`
 - 内部文档（本地保留）：`docs/internal/`
 
-该结构用于 OrbitClaw 独立版本的长期维护。
+该结构用于 LunaeClaw 独立版本的长期维护。

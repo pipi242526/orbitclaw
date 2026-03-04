@@ -10,7 +10,7 @@ from collections import deque
 from pathlib import Path
 from typing import Any
 
-from orbitclaw.app.gateway.control import (
+from lunaeclaw.app.gateway.control import (
     is_gateway_runtime_fresh,
     read_gateway_runtime_state,
 )
@@ -46,7 +46,7 @@ def evaluate_gateway_runtime_status(cfg_path: Path) -> tuple[bool, str, str]:
             "gateway data directory mismatch",
             "gateway 数据目录不一致",
         )
-    raw_poll = (os.environ.get("ORBITCLAW_GATEWAY_RELOAD_POLL_SECONDS") or "2.0").strip()
+    raw_poll = (os.environ.get("LUNAECLAW_GATEWAY_RELOAD_POLL_SECONDS") or "2.0").strip()
     try:
         poll_seconds = max(0.5, float(raw_poll))
     except ValueError:
@@ -72,7 +72,7 @@ _last_prune_ts: float = 0.0
 
 def runtime_trend_persist_hours_from_env() -> int:
     """Read optional trend persistence window from env (0 disables persistence)."""
-    raw = (os.environ.get("ORBITCLAW_WEBUI_TREND_PERSIST_HOURS") or "0").strip()
+    raw = (os.environ.get("LUNAECLAW_WEBUI_TREND_PERSIST_HOURS") or "0").strip()
     try:
         hours = int(raw)
     except ValueError:

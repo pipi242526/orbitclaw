@@ -1,11 +1,11 @@
 [project]
-name = "orbitclaw-ai"
+name = "lunaeclaw-ai"
 version = "0.1.1"
-description = "OrbitClaw: lightweight agent runtime for Chinese-first workflows"
+description = "LunaeClaw: lightweight agent runtime for Chinese-first workflows"
 requires-python = ">=3.11"
 license = {text = "MIT"}
 authors = [
-    {name = "OrbitClaw contributors"}
+    {name = "LunaeClaw contributors"}
 ]
 keywords = ["ai", "agent", "chatbot"]
 classifiers = [
@@ -52,37 +52,37 @@ dev = [
 ]
 
 [project.scripts]
-orbitclaw = "orbitclaw.app.cli.commands:app"
+lunaeclaw = "lunaeclaw.app.cli.commands:app"
 
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["orbitclaw"]
+packages = ["lunaeclaw"]
 
 [tool.hatch.build.targets.wheel.sources]
-"orbitclaw" = "orbitclaw"
+"lunaeclaw" = "lunaeclaw"
 
 # Include non-Python files in skills
 [tool.hatch.build]
 include = [
-    "orbitclaw/**/*.py",
-    "orbitclaw/capabilities/skills/**/*.md",
-    "orbitclaw/capabilities/skills/**/*.sh",
-    "orbitclaw/templates/**/*.md",
+    "lunaeclaw/**/*.py",
+    "lunaeclaw/capabilities/skills/**/*.md",
+    "lunaeclaw/capabilities/skills/**/*.sh",
+    "lunaeclaw/templates/**/*.md",
 ]
 
 [tool.hatch.build.targets.sdist]
 include = [
-    "orbitclaw/",
+    "lunaeclaw/",
     "bridge/",
     "README.md",
     "LICENSE",
 ]
 
 [tool.hatch.build.targets.wheel.force-include]
-"bridge" = "orbitclaw/bridge"
+"bridge" = "lunaeclaw/bridge"
 
 [tool.ruff]
 line-length = 100

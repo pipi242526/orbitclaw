@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING, Any, Callable
 
 from loguru import logger
 
-from orbitclaw.core.context.context_access import (
+from lunaeclaw.core.context.context_access import (
     get_effective_model,
     invalidate_session,
     new_temp_session,
@@ -14,8 +14,8 @@ from orbitclaw.core.context.context_access import (
 )
 
 if TYPE_CHECKING:
-    from orbitclaw.core.bus.events import InboundMessage, OutboundMessage
-    from orbitclaw.services.session.manager import Session
+    from lunaeclaw.core.bus.events import InboundMessage, OutboundMessage
+    from lunaeclaw.services.session.manager import Session
 
 
 def register_builtin_commands(loop: Any) -> None:

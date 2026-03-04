@@ -27,7 +27,7 @@ def _collect_commits(upstream: str, target: str, limit: int) -> list[tuple[str, 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Generate upstream audit markdown")
     parser.add_argument("--upstream", default="origin/main")
-    parser.add_argument("--target", default="codex/dev")
+    parser.add_argument("--target", default="main")
     parser.add_argument("--month", required=True, help="YYYY-MM")
     parser.add_argument("--limit", type=int, default=120)
     args = parser.parse_args()

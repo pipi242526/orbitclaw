@@ -5,14 +5,14 @@ from __future__ import annotations
 from html import escape
 from typing import Any
 
-from orbitclaw.app.webui.catalog import (
+from lunaeclaw.app.webui.catalog import (
     library_text as _library_text,
 )
-from orbitclaw.app.webui.common import _pretty_json
-from orbitclaw.app.webui.i18n import ui_copy as _ui_copy
-from orbitclaw.app.webui.i18n import ui_term as _ui_term
-from orbitclaw.app.webui.icons import icon_svg
-from orbitclaw.app.webui.view_models import build_skill_library_rows, build_skill_rows
+from lunaeclaw.app.webui.common import _pretty_json
+from lunaeclaw.app.webui.i18n import ui_copy as _ui_copy
+from lunaeclaw.app.webui.i18n import ui_term as _ui_term
+from lunaeclaw.app.webui.icons import icon_svg
+from lunaeclaw.app.webui.view_models import build_skill_library_rows, build_skill_rows
 
 
 def render_skills(handler: Any, *, msg: str = "", err: str = "") -> None:

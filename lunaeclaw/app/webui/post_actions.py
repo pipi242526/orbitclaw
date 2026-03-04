@@ -8,11 +8,11 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from orbitclaw.app.webui.actions_channels import handle_post_channels as _handle_post_channels
-from orbitclaw.app.webui.actions_chat import handle_post_chat as _handle_post_chat
-from orbitclaw.app.webui.actions_endpoints import handle_post_endpoints as _handle_post_endpoints
-from orbitclaw.app.webui.actions_mcp import handle_post_mcp as _handle_post_mcp
-from orbitclaw.app.webui.actions_skills import handle_post_skills as _handle_post_skills
+from lunaeclaw.app.webui.actions_channels import handle_post_channels as _handle_post_channels
+from lunaeclaw.app.webui.actions_chat import handle_post_chat as _handle_post_chat
+from lunaeclaw.app.webui.actions_endpoints import handle_post_endpoints as _handle_post_endpoints
+from lunaeclaw.app.webui.actions_mcp import handle_post_mcp as _handle_post_mcp
+from lunaeclaw.app.webui.actions_skills import handle_post_skills as _handle_post_skills
 
 
 def handle_post_chat(handler: Any, form: dict[str, list[str]]) -> None:

@@ -6,7 +6,7 @@ import os
 
 
 def resolve_receive_id_type(chat_id: str) -> str:
-    """Resolve Feishu receive_id_type from OrbitClaw chat_id."""
+    """Resolve Feishu receive_id_type from LunaeClaw chat_id."""
     return "chat_id" if str(chat_id).startswith("oc_") else "open_id"
 
 

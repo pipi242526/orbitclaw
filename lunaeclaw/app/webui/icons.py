@@ -38,22 +38,36 @@ def icon_svg(name: str, *, title: str = "") -> str:
     )
 
 
-def logo_svg(*, title: str = "OrbitClaw") -> str:
+def logo_svg(*, title: str = "LunaeClaw") -> str:
     """Return brand logo mark SVG."""
     title_node = f"<title>{escape(title)}</title>" if title else ""
     return (
         '<span class="brand-logo" aria-hidden="true">'
         '<svg viewBox="0 0 56 56" fill="none">'
         f"{title_node}"
-        '<defs><linearGradient id="oc-g" x1="8" y1="6" x2="46" y2="50" gradientUnits="userSpaceOnUse">'
-        '<stop stop-color="#49A1FF"></stop><stop offset="1" stop-color="#1E63FF"></stop>'
-        "</linearGradient></defs>"
-        '<rect x="4.5" y="4.5" width="47" height="47" rx="14" fill="url(#oc-g)"></rect>'
-        '<path d="M16 30c0-7.2 5.8-13 13-13 5 0 9.5 2.8 11.7 7.2" stroke="white" stroke-width="3.6" stroke-linecap="round"></path>'
-        '<path d="M39.5 19.5 42 28l-8.5-2.5" stroke="white" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"></path>'
-        '<circle cx="25" cy="33" r="3.3" fill="white"></circle>'
-        '<path d="M30.5 36.5 35 41" stroke="white" stroke-width="3.2" stroke-linecap="round"></path>'
-        '<path d="M20 41.2c3.2 2.2 7 3.3 11 3.3" stroke="white" stroke-opacity=".9" stroke-width="2.8" stroke-linecap="round"></path>'
+        '<defs>'
+        '<linearGradient id="lc-bg" x1="0" y1="0" x2="1" y2="1">'
+        '<stop offset="0%" stop-color="#0B1220"></stop>'
+        '<stop offset="55%" stop-color="#14243D"></stop>'
+        '<stop offset="100%" stop-color="#1A3457"></stop>'
+        "</linearGradient>"
+        '<linearGradient id="lc-moon" x1="0" y1="0" x2="1" y2="1">'
+        '<stop offset="0%" stop-color="#FFE2A8"></stop>'
+        '<stop offset="100%" stop-color="#FFC56A"></stop>'
+        "</linearGradient>"
+        '<linearGradient id="lc-claw" x1="0" y1="0" x2="1" y2="1">'
+        '<stop offset="0%" stop-color="#6BD6FF"></stop>'
+        '<stop offset="100%" stop-color="#35B0FF"></stop>'
+        "</linearGradient>"
+        "</defs>"
+        '<rect x="4.5" y="4.5" width="47" height="47" rx="14" fill="url(#lc-bg)"></rect>'
+        '<circle cx="24.6" cy="26" r="11.6" fill="url(#lc-moon)"></circle>'
+        '<circle cx="28.8" cy="23.8" r="11.2" fill="url(#lc-bg)"></circle>'
+        '<g stroke="url(#lc-claw)" stroke-width="2.4" stroke-linecap="round">'
+        '<path d="M30.8 18.8c6.1 3.2 9.6 8 10.5 14.1"></path>'
+        '<path d="M28.4 21.8c5 3 7.6 6.7 8.1 11.2"></path>'
+        '<path d="M26.1 24.8c3.6 2.5 5.4 5.2 5.8 8.5"></path>'
+        "</g>"
         "</svg>"
         "</span>"
     )

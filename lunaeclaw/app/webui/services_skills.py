@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from typing import Any
 
-from orbitclaw.app.webui.common import _collect_skill_rows
-from orbitclaw.platform.utils.helpers import get_global_skills_path
+from lunaeclaw.app.webui.common import _collect_skill_rows
+from lunaeclaw.platform.utils.helpers import get_global_skills_path
 
 
 def localize_skill_install_reason(reason: str, *, zh: bool) -> str:

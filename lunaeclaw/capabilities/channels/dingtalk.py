@@ -8,10 +8,10 @@ from typing import Any
 import httpx
 from loguru import logger
 
-from orbitclaw.capabilities.channels.base import BaseChannel
-from orbitclaw.core.bus.events import OutboundMessage
-from orbitclaw.core.bus.queue import MessageBus
-from orbitclaw.platform.config.schema import DingTalkConfig
+from lunaeclaw.capabilities.channels.base import BaseChannel
+from lunaeclaw.core.bus.events import OutboundMessage
+from lunaeclaw.core.bus.queue import MessageBus
+from lunaeclaw.platform.config.schema import DingTalkConfig
 
 try:
     from dingtalk_stream import (

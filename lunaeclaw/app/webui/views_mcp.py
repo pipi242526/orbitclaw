@@ -5,20 +5,20 @@ from __future__ import annotations
 from html import escape
 from typing import Any, Callable
 
-from orbitclaw.app.webui.catalog import (
+from lunaeclaw.app.webui.catalog import (
     MCP_LIBRARY as _MCP_LIBRARY,
 )
-from orbitclaw.app.webui.catalog import (
+from lunaeclaw.app.webui.catalog import (
     evaluate_mcp_library_health,
 )
-from orbitclaw.app.webui.catalog import (
+from lunaeclaw.app.webui.catalog import (
     library_text as _library_text,
 )
-from orbitclaw.app.webui.i18n import ui_copy as _ui_copy
-from orbitclaw.app.webui.i18n import ui_term as _ui_term
-from orbitclaw.app.webui.icons import icon_svg
-from orbitclaw.app.webui.view_models import build_mcp_server_rows
-from orbitclaw.platform.config.schema import Config
+from lunaeclaw.app.webui.i18n import ui_copy as _ui_copy
+from lunaeclaw.app.webui.i18n import ui_term as _ui_term
+from lunaeclaw.app.webui.icons import icon_svg
+from lunaeclaw.app.webui.view_models import build_mcp_server_rows
+from lunaeclaw.platform.config.schema import Config
 
 
 def render_mcp(

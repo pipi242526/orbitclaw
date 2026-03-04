@@ -2,8 +2,8 @@
 
 from typing import Any, Awaitable, Callable
 
-from orbitclaw.capabilities.tools.base import Tool
-from orbitclaw.core.bus.events import OutboundMessage
+from lunaeclaw.capabilities.tools.base import Tool
+from lunaeclaw.core.bus.events import OutboundMessage
 
 
 class MessageTool(Tool):

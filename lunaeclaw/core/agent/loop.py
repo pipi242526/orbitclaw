@@ -12,15 +12,15 @@ from typing import TYPE_CHECKING, Awaitable, Callable
 
 from loguru import logger
 
-from orbitclaw.capabilities.tools.cron import CronTool
-from orbitclaw.capabilities.tools.message import MessageTool
-from orbitclaw.capabilities.tools.registry import ToolRegistry
-from orbitclaw.capabilities.tools.spawn import SpawnTool
-from orbitclaw.capabilities.tools.web import (
+from lunaeclaw.capabilities.tools.cron import CronTool
+from lunaeclaw.capabilities.tools.message import MessageTool
+from lunaeclaw.capabilities.tools.registry import ToolRegistry
+from lunaeclaw.capabilities.tools.spawn import SpawnTool
+from lunaeclaw.capabilities.tools.web import (
     has_exa_search_mcp,
 )
-from orbitclaw.core.agent.subagent import SubagentManager
-from orbitclaw.core.agent.tooling import (
+from lunaeclaw.core.agent.subagent import SubagentManager
+from lunaeclaw.core.agent.tooling import (
     is_mcp_server_enabled,
     is_tool_enabled,
     normalize_name_set,
@@ -29,8 +29,8 @@ from orbitclaw.core.agent.tooling import (
     should_try_exa_mcp_search,
     truncate_tool_output,
 )
-from orbitclaw.core.agent.toolset_builder import ToolsetBuilder
-from orbitclaw.core.agent.turn_commands import (
+from lunaeclaw.core.agent.toolset_builder import ToolsetBuilder
+from lunaeclaw.core.agent.turn_commands import (
     cmd_help,
     cmd_model,
     cmd_new,
@@ -38,25 +38,25 @@ from orbitclaw.core.agent.turn_commands import (
     parse_slash_command,
     register_builtin_commands,
 )
-from orbitclaw.core.agent.turn_handlers import (
+from lunaeclaw.core.agent.turn_handlers import (
     handle_inbound_message,
     process_direct_message,
     process_message,
 )
-from orbitclaw.core.agent.turn_runner import (
+from lunaeclaw.core.agent.turn_runner import (
     run_agent_iterations,
 )
-from orbitclaw.core.bus.events import InboundMessage, OutboundMessage
-from orbitclaw.core.bus.queue import MessageBus
-from orbitclaw.core.context.context import ContextBuilder
-from orbitclaw.core.context.memory import MemoryStore
-from orbitclaw.core.policy.policy_pipeline import PolicyPipeline
-from orbitclaw.platform.providers.base import LLMProvider
-from orbitclaw.services.session.manager import Session, SessionManager
+from lunaeclaw.core.bus.events import InboundMessage, OutboundMessage
+from lunaeclaw.core.bus.queue import MessageBus
+from lunaeclaw.core.context.context import ContextBuilder
+from lunaeclaw.core.context.memory import MemoryStore
+from lunaeclaw.core.policy.policy_pipeline import PolicyPipeline
+from lunaeclaw.platform.providers.base import LLMProvider
+from lunaeclaw.services.session.manager import Session, SessionManager
 
 if TYPE_CHECKING:
-    from orbitclaw.platform.config.schema import ClaudeCodeToolConfig, ExecToolConfig
-    from orbitclaw.services.cron.service import CronService
+    from lunaeclaw.platform.config.schema import ClaudeCodeToolConfig, ExecToolConfig
+    from lunaeclaw.services.cron.service import CronService
 
 
 class AgentLoop:
@@ -120,7 +120,7 @@ class AgentLoop:
         gc_every_turns: int = _GC_EVERY_TURNS,
         turn_timeout_seconds: int = 45,
     ):
-        from orbitclaw.platform.config.schema import ExecToolConfig
+        from lunaeclaw.platform.config.schema import ExecToolConfig
         self.bus = bus
         self.provider = provider
         self.workspace = workspace
@@ -272,7 +272,7 @@ class AgentLoop:
         if self._mcp_connected or self._mcp_connecting or not self._mcp_servers:
             return
         self._mcp_connecting = True
-        from orbitclaw.capabilities.tools.mcp import connect_mcp_servers
+        from lunaeclaw.capabilities.tools.mcp import connect_mcp_servers
         try:
             self._mcp_stack = AsyncExitStack()
             await self._mcp_stack.__aenter__()
@@ -369,7 +369,7 @@ class AgentLoop:
             result,
             tool_name,
             limit=self._TOOL_RESULT_MAX_CHARS,
-            source_label="orbitclaw",
+            source_label="lunaeclaw",
         )
 
     def _format_user_error(self, err: Exception, *, user_message: str | None = None) -> str:

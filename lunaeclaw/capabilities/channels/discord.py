@@ -8,11 +8,11 @@ import httpx
 import websockets
 from loguru import logger
 
-from orbitclaw.capabilities.channels.base import BaseChannel
-from orbitclaw.capabilities.channels.common.retry import clamp_retry_after, linear_retry_delay
-from orbitclaw.core.bus.events import OutboundMessage
-from orbitclaw.core.bus.queue import MessageBus
-from orbitclaw.platform.config.schema import DiscordConfig
+from lunaeclaw.capabilities.channels.base import BaseChannel
+from lunaeclaw.capabilities.channels.common.retry import clamp_retry_after, linear_retry_delay
+from lunaeclaw.core.bus.events import OutboundMessage
+from lunaeclaw.core.bus.queue import MessageBus
+from lunaeclaw.platform.config.schema import DiscordConfig
 
 DISCORD_API_BASE = "https://discord.com/api/v10"
 MAX_ATTACHMENT_BYTES = 20 * 1024 * 1024  # 20MB
@@ -192,9 +192,9 @@ class DiscordChannel(BaseChannel):
                 "token": self.config.token,
                 "intents": self.config.intents,
                 "properties": {
-                    "os": "orbitclaw",
-                    "browser": "orbitclaw",
-                    "device": "orbitclaw",
+                    "os": "lunaeclaw",
+                    "browser": "lunaeclaw",
+                    "device": "lunaeclaw",
                 },
             },
         }
@@ -235,7 +235,7 @@ class DiscordChannel(BaseChannel):
 
         content_parts = [content] if content else []
         media_paths: list[str] = []
-        from orbitclaw.platform.utils.helpers import get_media_dir, safe_filename
+        from lunaeclaw.platform.utils.helpers import get_media_dir, safe_filename
         media_dir = get_media_dir()
         media_dir.mkdir(parents=True, exist_ok=True)
 

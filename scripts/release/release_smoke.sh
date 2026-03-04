@@ -6,15 +6,15 @@ cd "$ROOT_DIR"
 
 echo "==> release smoke: compile checks"
 python3 -m py_compile \
-  orbitclaw/core/context/context.py \
-  orbitclaw/core/agent/loop.py \
-  orbitclaw/core/agent/subagent.py \
-  orbitclaw/capabilities/tools/media.py \
-  orbitclaw/capabilities/tools/export.py \
-  orbitclaw/capabilities/tools/web.py \
-  orbitclaw/app/cli/commands.py \
-  orbitclaw/platform/config/schema.py \
-  orbitclaw/app/webui/server.py
+  lunaeclaw/core/context/context.py \
+  lunaeclaw/core/agent/loop.py \
+  lunaeclaw/core/agent/subagent.py \
+  lunaeclaw/capabilities/tools/media.py \
+  lunaeclaw/capabilities/tools/export.py \
+  lunaeclaw/capabilities/tools/web.py \
+  lunaeclaw/app/cli/commands.py \
+  lunaeclaw/platform/config/schema.py \
+  lunaeclaw/app/webui/server.py
 
 echo "==> release smoke: focused tests"
 if command -v uv >/dev/null 2>&1; then
@@ -34,13 +34,13 @@ else
 fi
 
 echo "==> release smoke: config/status sanity"
-if command -v orbitclaw >/dev/null 2>&1; then
-  orbitclaw status >/tmp/orbitclaw_status_smoke.txt
-  orbitclaw doctor >/tmp/orbitclaw_doctor_smoke.txt
-  echo "status: /tmp/orbitclaw_status_smoke.txt"
-  echo "doctor: /tmp/orbitclaw_doctor_smoke.txt"
+if command -v lunaeclaw >/dev/null 2>&1; then
+  lunaeclaw status >/tmp/lunaeclaw_status_smoke.txt
+  lunaeclaw doctor >/tmp/lunaeclaw_doctor_smoke.txt
+  echo "status: /tmp/lunaeclaw_status_smoke.txt"
+  echo "doctor: /tmp/lunaeclaw_doctor_smoke.txt"
 else
-  echo "orbitclaw CLI not found in PATH, skipped status/doctor runtime checks."
+  echo "lunaeclaw CLI not found in PATH, skipped status/doctor runtime checks."
 fi
 
 echo "==> release smoke: PASS"

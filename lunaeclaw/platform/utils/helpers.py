@@ -1,4 +1,4 @@
-"""Utility functions for orbitclaw."""
+"""Utility functions for lunaeclaw."""
 
 import os
 from datetime import datetime
@@ -12,60 +12,60 @@ def ensure_dir(path: Path) -> Path:
 
 
 def get_data_path() -> Path:
-    """Get the orbitclaw data directory (default ~/.orbitclaw, override via ORBITCLAW_DATA_DIR)."""
-    override = (os.environ.get("ORBITCLAW_DATA_DIR") or "").strip()
+    """Get the lunaeclaw data directory (default ~/.lunaeclaw, override via LUNAECLAW_DATA_DIR)."""
+    override = (os.environ.get("LUNAECLAW_DATA_DIR") or "").strip()
     if override:
         path = Path(override).expanduser()
         if not path.is_absolute():
             path = (Path.home() / path).resolve()
         return ensure_dir(path)
-    return ensure_dir(Path.home() / ".orbitclaw")
+    return ensure_dir(Path.home() / ".lunaeclaw")
 
 
 def get_config_dir() -> Path:
-    """Get the configuration directory (~/.orbitclaw)."""
+    """Get the configuration directory (~/.lunaeclaw)."""
     return get_data_path()
 
 
 def get_config_file() -> Path:
-    """Get the main config file path (~/.orbitclaw/config.json)."""
+    """Get the main config file path (~/.lunaeclaw/config.json)."""
     return get_config_dir() / "config.json"
 
 
 def get_env_dir() -> Path:
-    """Get the env helper directory (~/.orbitclaw/env)."""
+    """Get the env helper directory (~/.lunaeclaw/env)."""
     return ensure_dir(get_data_path() / "env")
 
 
 def get_env_file() -> Path:
-    """Get the primary env helper file (~/.orbitclaw/.env)."""
+    """Get the primary env helper file (~/.lunaeclaw/.env)."""
     return get_data_path() / ".env"
 
 
 def get_mcp_home() -> Path:
-    """Get the MCP runtime home (~/.orbitclaw/mcp)."""
+    """Get the MCP runtime home (~/.lunaeclaw/mcp)."""
     return ensure_dir(get_data_path() / "mcp")
 
 
 def get_mcp_bin_dir() -> Path:
-    """Get the MCP local bin directory (~/.orbitclaw/mcp/bin)."""
+    """Get the MCP local bin directory (~/.lunaeclaw/mcp/bin)."""
     return ensure_dir(get_mcp_home() / "bin")
 
 
 def get_mcp_data_dir() -> Path:
-    """Get the MCP local data/cache directory (~/.orbitclaw/mcp/data)."""
+    """Get the MCP local data/cache directory (~/.lunaeclaw/mcp/data)."""
     return ensure_dir(get_mcp_home() / "data")
 
 
 def get_media_dir() -> Path:
-    """Get the downloaded media directory (~/.orbitclaw/media)."""
+    """Get the downloaded media directory (~/.lunaeclaw/media)."""
     return ensure_dir(get_data_path() / "media")
 
 
 def get_exports_dir(custom_dir: str | Path | None = None) -> Path:
     """Get the generated output files directory.
 
-    If `custom_dir` is provided, relative paths are resolved under ~/.orbitclaw.
+    If `custom_dir` is provided, relative paths are resolved under ~/.lunaeclaw.
     """
     if custom_dir:
         p = Path(custom_dir).expanduser()
@@ -76,7 +76,7 @@ def get_exports_dir(custom_dir: str | Path | None = None) -> Path:
 
 
 def get_history_dir() -> Path:
-    """Get CLI history directory (~/.orbitclaw/history)."""
+    """Get CLI history directory (~/.lunaeclaw/history)."""
     return ensure_dir(get_data_path() / "history")
 
 
@@ -86,7 +86,7 @@ def get_cli_history_file() -> Path:
 
 
 def get_bridge_dir() -> Path:
-    """Get bridge working directory (~/.orbitclaw/bridge)."""
+    """Get bridge working directory (~/.lunaeclaw/bridge)."""
     return ensure_dir(get_data_path() / "bridge")
 
 
@@ -119,7 +119,7 @@ def get_skills_path(workspace: Path | None = None) -> Path:
 
 
 def get_global_skills_path() -> Path:
-    """Get the global custom skills directory (~/.orbitclaw/skills)."""
+    """Get the global custom skills directory (~/.lunaeclaw/skills)."""
     return ensure_dir(get_data_path() / "skills")
 
 

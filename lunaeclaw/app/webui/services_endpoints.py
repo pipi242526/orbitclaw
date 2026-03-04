@@ -5,9 +5,9 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from orbitclaw.platform.config.loader import load_config
-from orbitclaw.platform.config.schema import EndpointProviderConfig
-from orbitclaw.platform.providers.endpoint_validator import validate_default_model_reference
+from lunaeclaw.platform.config.loader import load_config
+from lunaeclaw.platform.config.schema import EndpointProviderConfig
+from lunaeclaw.platform.providers.endpoint_validator import validate_default_model_reference
 
 
 def validate_default_model(cfg_path: Path, model: str) -> tuple[bool, str]:

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from html import escape
 
-from orbitclaw.app.webui.icons import icon_svg, logo_svg
+from lunaeclaw.app.webui.icons import icon_svg, logo_svg
 
 
 def render_page_shell(
@@ -20,7 +20,7 @@ def render_page_shell(
     theme_label: str,
     theme_options_html: str,
     copied_label: str,
-    brand_name: str = "OrbitClaw Console",
+    brand_name: str = "LunaeClaw Control Hub",
 ) -> str:
     """Render the full HTML shell for WebUI pages."""
     lang_icon = icon_svg("globe")
@@ -570,7 +570,7 @@ def render_page_shell(
       }});
     }})();
     (function bindThemePicker() {{
-      const key = "orbitclaw.app.webui.theme";
+      const key = "lunaeclaw.app.webui.theme";
       const root = document.documentElement;
       const picker = document.getElementById("nb-theme-picker");
       if (!picker) return;

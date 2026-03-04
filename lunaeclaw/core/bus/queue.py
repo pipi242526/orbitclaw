@@ -5,7 +5,7 @@ from typing import Literal
 
 from loguru import logger
 
-from orbitclaw.core.bus.events import InboundMessage, OutboundMessage
+from lunaeclaw.core.bus.events import InboundMessage, OutboundMessage
 
 
 class MessageBus:
