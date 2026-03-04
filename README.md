@@ -179,10 +179,10 @@ Finally, run a health check and report config diff + rollback steps.
 orbitclaw/
 ├── orbitclaw/          # runtime core
 ├── assets/             # brand assets
-├── docs/               # product/ops/developer docs
-├── release/            # governance/checklists/audits
+├── docs/public/        # publishable docs
+├── release/            # public baseline only
 ├── scripts/            # quality and release scripts
-└── tests/              # regression tests
+└── tests/public/       # public regression subset
 ```
 
 Key runtime paths:
@@ -210,12 +210,12 @@ These are intentionally unchecked; mark them only when done.
 
 ## Governance
 
-- Engineering rules: `DEVELOPMENT_RULES.md`
+- Public governance docs: `docs/public/governance/README.md`
 - Security policy: `SECURITY.md`
-- Quality gate: `release/QUALITY_GATE.md`
-- Release checklist: `release/RELEASE_CHECKLIST.md`
-- Upstream audit policy: `release/UPSTREAM_PATCH_AUDIT.md`
-- Monthly audit records: `release/upstream-audits/`
+- Publishing guide: `docs/public/governance/PUBLISHING.md`
+- Open-source boundary rules: `docs/public/governance/OPEN_SOURCE_RULES.md`
+- Lint baseline: `release/lint-baseline.txt`
+- Public whitelist: `PUBLIC_WHITELIST.md`
 
 ## Upstream Attribution
 

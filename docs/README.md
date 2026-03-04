@@ -2,8 +2,7 @@
 
 **Language / 语言**: [English](README.md) | [简体中文](README.zh-CN.md)
 
-- Product docs: `docs/product/`
-- Operations docs: `docs/ops/`
-- Developer docs: `docs/developer/`
+- Public docs: `docs/public/` (contains `docs/public/product/`, `docs/public/ops/`, `docs/public/governance/`)
+- Internal docs (local only): `docs/internal/`
 
 This structure is intended for independent fork releases.

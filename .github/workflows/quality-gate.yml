@@ -9,9 +9,17 @@ on:
     tags:
       - "v*"
 
+permissions:
+  contents: read
+
+concurrency:
+  group: quality-gate-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   incremental-quality:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
         with:
@@ -22,8 +30,5 @@ jobs:
       - name: Install dependencies
         run: uv sync --extra dev
 
-      - name: Incremental lint (changed Python files)
-        run: python scripts/lint_changed.py
-
-      - name: Tests
-        run: uv run pytest -q
+      - name: Quality gate
+        run: make quality

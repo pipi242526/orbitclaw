@@ -1,5 +1,7 @@
 .assets
 .env
+.env.local
+.env.*.local
 *.pyc
 dist/
 build/
@@ -19,3 +21,22 @@ poetry.lock
 .pytest_cache/
 botpy.log
 .DS_Store
+
+# Local-only workspace and notes (keep out of GitHub)
+.local/
+local/
+notes/
+tmp/
+.public-release/
+docs/internal/
+tests/internal/
+release/internal/
+
+# Common local override config names
+*.local.json
+*.local.yaml
+*.local.yml
+*.local.toml
+config.local.json
+deploy.local.sh
+server.local.txt

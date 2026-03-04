@@ -181,10 +181,10 @@ OPENAI_API_KEY=sk-xxx
 orbitclaw/
 ├── orbitclaw/          # 运行时核心
 ├── assets/             # 品牌资源
-├── docs/               # 产品/运维/开发文档
-├── release/            # 治理与发版清单
+├── docs/public/        # 可公开文档
+├── release/            # 仅公开 baseline
 ├── scripts/            # 脚本与质量工具
-└── tests/              # 回归测试
+└── tests/public/       # 公开回归最小集
 ```
 
 关键运行目录：
@@ -212,12 +212,12 @@ orbitclaw/
 
 ## 治理文档
 
-- 工程规则：`DEVELOPMENT_RULES.md`
+- 公开治理文档：`docs/public/governance/README.zh-CN.md`
 - 安全策略：`SECURITY.md`
-- 质量闸门：`release/QUALITY_GATE.md`
-- 发布清单：`release/RELEASE_CHECKLIST.md`
-- 上游补丁审计策略：`release/UPSTREAM_PATCH_AUDIT.md`
-- 月度审计记录：`release/upstream-audits/`
+- 发布指南：`docs/public/governance/PUBLISHING.md`
+- 开源边界规则：`docs/public/governance/OPEN_SOURCE_RULES.md`
+- Lint 基线：`release/lint-baseline.txt`
+- 公开白名单：`PUBLIC_WHITELIST.md`
 
 ## 上游归因
 

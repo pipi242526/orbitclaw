@@ -52,7 +52,7 @@ dev = [
 ]
 
 [project.scripts]
-orbitclaw = "orbitclaw.cli.commands:app"
+orbitclaw = "orbitclaw.app.cli.commands:app"
 
 [build-system]
 requires = ["hatchling"]
@@ -68,8 +68,8 @@ packages = ["orbitclaw"]
 [tool.hatch.build]
 include = [
     "orbitclaw/**/*.py",
-    "orbitclaw/skills/**/*.md",
-    "orbitclaw/skills/**/*.sh",
+    "orbitclaw/capabilities/skills/**/*.md",
+    "orbitclaw/capabilities/skills/**/*.sh",
     "orbitclaw/templates/**/*.md",
 ]
 
@@ -94,4 +94,4 @@ ignore = ["E501"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
-testpaths = ["tests"]
+testpaths = ["tests/public"]
