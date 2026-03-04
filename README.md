@@ -210,7 +210,7 @@ These are intentionally unchecked; mark them only when done.
 
 ## Governance
 
-- Public governance docs: `docs/public/governance/README.md`
+- Public governance docs: `docs/public/governance/`
 - Security policy: `SECURITY.md`
 - Publishing guide: `docs/public/governance/PUBLISHING.md`
 - Open-source boundary rules: `docs/public/governance/OPEN_SOURCE_RULES.md`

@@ -212,7 +212,7 @@ orbitclaw/
 
 ## 治理文档
 
-- 公开治理文档：`docs/public/governance/README.zh-CN.md`
+- 公开治理文档：`docs/public/governance/`
 - 安全策略：`SECURITY.md`
 - 发布指南：`docs/public/governance/PUBLISHING.md`
 - 开源边界规则：`docs/public/governance/OPEN_SOURCE_RULES.md`
