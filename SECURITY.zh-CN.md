@@ -2,128 +2,161 @@
 
 **Language / 语言**: [English](SECURITY.md) | [简体中文](SECURITY.zh-CN.md)
 
-## 漏洞报告
+---
 
-如果你发现 OrbitClaw 的安全漏洞，请：
+## 快速加固（上线前先做这 6 件事）
 
-1. **不要** 公开提 GitHub Issue。
-2. 通过 GitHub 私有安全通道或联系维护者（xubinrencs@gmail.com）。
-3. 提供：
-   - 漏洞描述
-   - 复现步骤
-   - 影响范围
-   - 修复建议（可选）
+1. 所有启用渠道都配置 `allowFrom`（空列表 = 默认放行）。
+2. 收紧权限：`~/.lunaeclaw` 设为 `700`，配置/密钥文件设为 `600`。
+3. 使用非 root 用户运行。
+4. 启用 WhatsApp bridge 时，设置非空 `channels.whatsapp.bridgeToken`。
+5. 最小化工具暴露面（`tools.enabled`，可选 `tools.restrictToWorkspace=true`）。
+6. 做依赖安全扫描（`pip-audit`、`npm audit`）。
 
-目标响应时间：48 小时内。
+---
 
-## 安全实践
+## 适用范围
 
-### 1) API Key 管理
+本策略适用于：
 
-关键原则：不要把密钥提交到版本库。
+- `lunaeclaw` Python runtime（gateway / WebUI / channels / tools）
+- 内置 WhatsApp bridge（`bridge/`）
+- 默认运行目录 `~/.lunaeclaw`
 
-```bash
-chmod 600 ~/.orbitclaw/config.json
+## 当前安全现状（代码层面的真实行为）
+
+| 模块 | 当前行为 | 运维风险 |
+| --- | --- | --- |
+| 渠道认证 | `allowFrom` 为空时默认放行（`BaseChannel.is_allowed`） | 未授权用户可能直接使用机器人 |
+| WebUI 认证 | path-token URL，token 保存在 `~/.lunaeclaw/webui.path-token` | token 泄露即管理面泄露 |
+| 健康检查接口 | `/healthz` 无 token 可访问 | 有低风险探测面 |
+| Shell 工具 `exec` | 危险模式拦截 + 超时，不是 OS 沙箱 | 主机权限过大时仍有执行风险 |
+| 文件工具 | 有路径穿越防护，可选工作区限制 | 主机权限过宽会放大风险面 |
+
+## 10 分钟基线加固
+
+### 1) 收紧渠道入口
+
+示例：
+
+```json
+{
+  "channels": {
+    "telegram": {
+      "enabled": true,
+      "token": "${TELEGRAM_BOT_TOKEN}",
+      "allowFrom": ["123456789"]
+    }
+  }
+}
 ```
 
-建议：
-- 密钥优先放在 `~/.orbitclaw/.env` 或 `~/.orbitclaw/env/*.env`
-- 生产环境使用系统密钥管理器
-- 开发/生产分离密钥并定期轮换
+### 2) 收紧目录和文件权限
 
-### 2) 渠道访问控制
+```bash
+chmod 700 ~/.lunaeclaw
+chmod 600 ~/.lunaeclaw/config.json
+chmod 600 ~/.lunaeclaw/.env
+```
 
-生产环境必须配置 `allowFrom`。
+### 3) 密钥放环境变量
 
-- 空的 `allowFrom` 代表允许所有用户，不适合公开部署。
-- Telegram 建议按用户 ID 白名单。
-- WhatsApp 建议按完整国际手机号白名单。
+配置文件优先使用 `${ENV_VAR}` 占位，真实密钥存 env 或外部 secret manager。
 
-### 3) 命令执行安全
+### 4) 启用 WhatsApp 时加固 bridge
 
-`exec` 工具可以执行 shell 命令，应当：
+来自代码（`bridge/src/server.ts`）的事实：
 
-- 使用低权限专用用户运行
-- 审计工具调用日志
-- 不要关闭安全检查
-- 不要在高敏系统上无隔离运行
+- bridge 只绑定 `127.0.0.1`
+- 支持可选 token 鉴权（`BRIDGE_TOKEN` / `channels.whatsapp.bridgeToken`）
+- 认证状态目录为 `~/.lunaeclaw/whatsapp-auth`
 
-默认会阻断明显危险模式（如破坏性删除、格式化磁盘等）。
+建议权限：
 
-### 4) 文件系统安全
+```bash
+chmod 700 ~/.lunaeclaw/whatsapp-auth
+```
 
-虽然有路径穿越防护，仍建议：
+### 5) 最小化工具暴露面
 
-- 使用独立运行用户
-- 通过系统权限限制敏感目录
-- 定期审计文件读写行为
+- `tools.enabled` 仅保留必要工具
+- 可选开启 `tools.restrictToWorkspace=true`
+- 高风险工具按需启用
 
-### 5) 网络与桥接安全
+### 6) 依赖持续打补丁
 
-- 外部 API 默认 HTTPS。
-- WhatsApp bridge 默认仅监听 `127.0.0.1:3001`。
-- 建议配置 `bridgeToken` 作为 Python 与 Node 之间的共享密钥。
-
-### 6) 依赖安全
-
-定期做依赖扫描和升级：
+Python：
 
 ```bash
 pip install pip-audit
 pip-audit
-pip install --upgrade orbitclaw-ai
 ```
 
-Node 依赖（bridge）也需执行 `npm audit`。
+Node bridge：
 
-### 7) 生产部署建议
+```bash
+cd bridge
+npm audit
+npm audit fix
+```
 
-- 尽量容器化或虚拟机隔离
-- 使用专用系统用户运行
-- 设置目录权限（`~/.orbitclaw` 建议 700）
-- 开启日志监控和 API 额度/速率限制
-- 建立备份与回滚流程
+## 部署档位建议
 
-### 8) 数据隐私
+### 档位 A：Docker Compose（优先）
 
-- 日志可能包含敏感信息，应受保护
-- LLM 提供商可见提示词，需评估其隐私政策
-- 本地会保存会话/历史，需保护 `~/.orbitclaw`
+- gateway + webui 容器化
+- 只暴露必要端口
+- 用 `LUNAECLAW_DATA_DIR` 统一挂载数据目录
 
-### 9) 事件响应
+### 档位 B：裸机 / VM
 
-若疑似泄露：
+- 专用服务用户
+- 严格 `700/600` 权限
+- 主机防火墙限制入站
+- 日志集中采集
 
-1. 立即吊销密钥
-2. 检查未授权访问日志
-3. 轮换全部凭据
-4. 升级到最新版本
-5. 向维护者报告
+### 档位 C：Windows 运维
 
-## 已内置的安全机制
+- 推荐 WSL2 或 Docker Desktop
+- 避免管理员高权限 shell 长期运行
 
-- 输入校验（路径/请求长度/危险模式）
-- 允许列表访问控制
-- 超时与输出截断保护
-- 默认 HTTPS/TLS 通信
+## 事件响应 Runbook
 
-## 当前限制（需自行补强）
+1. 立即吊销已泄露 API Key。
+2. 停止 gateway、WebUI、bridge。
+3. 排查日志与渠道访问记录。
+4. 轮换全部密钥与凭据引用。
+5. 升级依赖后从干净构建重新部署。
+6. 向维护者同步事件细节。
 
-- 未内置完整全局限流
-- 仍有明文配置场景
-- 会话过期与审计能力有限
+## 漏洞报告
 
-## 部署前检查清单
+请走私密渠道：
 
-- [ ] 密钥未写入代码仓库
-- [ ] 配置文件权限正确（0600）
-- [ ] 所有启用渠道均配置 `allowFrom`
-- [ ] 进程非 root 运行
-- [ ] 依赖已更新并完成安全扫描
-- [ ] 日志监控与告警已配置
+1. 不要在公开 Issue 暴露利用细节。
+2. 使用 GitHub 私有安全通道，或邮件 `xubinrencs@gmail.com`。
+3. 提供版本/commit、复现步骤、影响评估、可选修复方向。
 
-## 更新
+目标响应：**48 小时内**。
 
-最后更新：2026-03-02
+## 当前限制
 
-更多安全更新请查看你自己的 OrbitClaw 仓库安全公告和 release 页面。
+- 暂无内置全局消息限流
+- 若不配置 `allowFrom`，渠道默认开放
+- 若仅靠 config 保存，密钥可能明文落盘
+- `exec` 是模式拦截，不是完整沙箱
+- 安全日志可用，但不是 SIEM 级能力
+
+## 上线前检查清单
+
+- [ ] 所有启用渠道已配置严格 `allowFrom`
+- [ ] 权限已收紧（`~/.lunaeclaw` 为 `700`，配置/密钥文件为 `600`）
+- [ ] 已强制非 root 运行
+- [ ] 启用 WhatsApp 时已设置 bridge token
+- [ ] 已完成 `pip-audit` 和 `npm audit`
+- [ ] 已配置日志监控与告警
+- [ ] 已准备并演练回滚流程
+
+## 更新说明
+
+最后更新：**2026-03-05**

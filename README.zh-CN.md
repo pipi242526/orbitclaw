@@ -1,16 +1,15 @@
 <div align="center">
-  <img src="assets/orbitclaw-banner.svg" alt="OrbitClaw banner" width="920" />
+  <img src="assets/lunaeclaw-banner.svg" alt="LunaeClaw banner" width="920" />
 
-# OrbitClaw
+# LunaeClaw
 
-**面向 Telegram 优先自动化与本地运维的轻量 Agent 运行时**
+**更适合真实部署的多渠道 Agent Runtime**
 
 <p>
   <img src="https://img.shields.io/badge/Python-3.11%2B-3776AB?style=flat&logo=python&logoColor=white" alt="Python" />
+  <img src="https://img.shields.io/badge/Node.js-20%2B-339933?style=flat&logo=nodedotjs&logoColor=white" alt="Node.js" />
   <img src="https://img.shields.io/badge/License-MIT-16a34a?style=flat" alt="License" />
   <img src="https://img.shields.io/badge/Version-0.1.1-0ea5e9?style=flat" alt="Version" />
-  <img src="https://img.shields.io/badge/Profile-1C1G%20friendly-0f766e?style=flat" alt="Profile" />
-  <img src="https://img.shields.io/badge/Status-Release%20Candidate-f97316?style=flat" alt="Status" />
 </p>
 
 **Language / 语言**: [English](README.md) | [简体中文](README.zh-CN.md)
@@ -19,111 +18,95 @@
 
 ---
 
-## 项目定位
+<div align="center">
 
-OrbitClaw 是独立维护的二次开发运行时，目标是：
+[项目概览](#项目概览) • [安装方式](#安装方式) • [平台支持](#平台支持) • [渠道支持](#渠道支持) • [目录树](#目录树) • [运维命令](#运维命令) • [安全基线](#安全基线)
 
-- 中文使用习惯友好，Telegram 优先
-- 小机器（1C1G）也能稳定跑
-- MCP/技能可插拔，核心回路不过度膨胀
-- WebUI + CLI 配置和诊断闭环
+</div>
 
-## 目录
+## 项目概览
 
-- [基本功能](#基本功能)
-- [快速开始](#快速开始)
-- [模型配置示例](#模型配置示例)
-- [MCP 推荐接入](#mcp-推荐接入)
-- [运行目录结构](#运行目录结构)
-- [后续开发路线（未完成）](#后续开发路线未完成)
-- [治理文档](#治理文档)
-- [上游归因](#上游归因)
+LunaeClaw 面向的是“要上线、要维护、要排障”的场景，不是只跑 demo 的脚手架。
 
-## OrbitClaw 优势亮点
+| 你会得到什么 | 为什么实用 |
+| --- | --- |
+| `lunaeclaw gateway` | 长时运行主循环，适合真实流量 |
+| `lunaeclaw webui` | 可视化配置与诊断，不必反复手改 JSON |
+| 多渠道适配层 | 一套 runtime 统一接 Telegram/Discord/Feishu/DingTalk/QQ/Slack/WhatsApp/Email/Mochat |
+| MCP + Skills + aliases | 业务扩展更灵活，不必频繁改核心代码 |
+| `status` + `doctor` | 出问题时快速定位 |
 
-### 1) 面向真实场景，不是演示型项目
+> [!TIP]
+> 不绑定单一渠道。你可以只开必要能力，保持系统干净、可控。
 
-- 默认策略围绕日常聊天自动化（尤其 Telegram）优化
-- 出错时优先返回可执行修复建议，而不是仅抛异常文本
-- 输出后处理策略可减少工具调用细节外泄
+## 安装方式
 
-### 2) 轻量优先
+### 先选路线
 
-- 默认参数针对 1C1G 主机可持续运行
-- 队列/超时/上下文预算都可显式配置
-- 可选能力保持可选，避免核心路径臃肿
+| 场景 | 推荐 |
+| --- | --- |
+| 本地开发（macOS/Linux） | `uv sync --extra dev` |
+| Windows 工作站 | WSL2 + Ubuntu + `uv` |
+| 服务器 / NAS / homelab | Docker Compose |
+| 最小可用安装 | `pip install -e .` |
 
-### 3) 可维护性更强
+### macOS / Linux 本地开发
 
-- 核心回路和扩展点分层，降低后续改动风险
-- MCP/技能主要通过配置与 aliases 管理，替换成本低
-- 诊断与测试已纳入日常开发闭环（`status`、`doctor`、pytest）
-
-### 4) 中文优先但不锁死
-
-- 中文默认体验优先
-- 文档双语与 UI i18n 结构已就位，后续扩语种成本更可控
-
-## 基本功能
-
-### 1) 机器人核心能力（优先级最高）
-
-- 统一消息处理主循环与命令路由
-- 统一输出后处理（语言统一、输出去泄露、失败修复建议）
-- 上下文预算控制（history/memory/background/inline media）
-- 队列上限与超时机制，提升可预测性
-
-### 2) 工具与技能
-
-- 内置网页检索/抓取、文件读写、Shell 执行等能力
-- `tools.aliases` 支持上层习惯不变、底层工具可替换
-- MCP 过滤器支持精细启停与暴露控制
-
-### 3) 多渠道适配
-
-- 默认推荐 Telegram
-- 支持 Discord / Feishu / DingTalk / QQ / Slack / WhatsApp / Email / Mochat
-- 渠道层负责协议映射，业务逻辑尽量收敛到核心层
-
-### 4) 运维与诊断
-
-- `orbitclaw status` / `orbitclaw doctor`
-- WebUI 管理模型、渠道、MCP、技能、媒体
-- Docker 部署与共享数据目录一致性检查
-
-## 快速开始
-
-### 1) 安装
+前置条件：Python `3.11+`、`uv`；若要启用 WhatsApp bridge，再安装 Node.js `20+`。
 
 ```bash
-git clone <your-orbitclaw-repo-url>
-cd orbitclaw
+git clone <your-repo-url>
+cd OrbitClaw
+uv sync --extra dev
+uv run lunaeclaw onboard
+uv run lunaeclaw gateway
+# 另开终端
+uv run lunaeclaw webui --host 0.0.0.0 --port 18791
+```
+
+### Windows（推荐 WSL2）
+
+```bash
+# 在 WSL2 的 Ubuntu 中执行
+sudo apt update
+sudo apt install -y curl git python3 python3-venv python3-pip
+curl -LsSf https://astral.sh/uv/install.sh | sh
+
+git clone <your-repo-url>
+cd OrbitClaw
+uv sync --extra dev
+uv run lunaeclaw onboard
+uv run lunaeclaw gateway
+```
+
+### 服务器 / NAS（推荐 Docker Compose）
+
+```bash
+git clone <your-repo-url>
+cd OrbitClaw
+mkdir -p ./.lunaeclaw-data
+docker compose up -d --build lunaeclaw-gateway lunaeclaw-webui
+docker compose logs -f --tail=200
+```
+
+默认端口：
+
+- Gateway `18790`
+- WebUI `18791`
+
+### 最小可用（editable 安装）
+
+```bash
+git clone <your-repo-url>
+cd OrbitClaw
 pip install -e .
+lunaeclaw onboard
+lunaeclaw gateway
 ```
 
-### 2) 初始化
+### 首次 Provider 配置
 
-```bash
-orbitclaw onboard
-```
-
-### 3) 启动 gateway
-
-```bash
-orbitclaw gateway
-```
-
-### 4) 启动 WebUI
-
-```bash
-orbitclaw webui --host 0.0.0.0 --port 18791
-```
-
-WebUI 使用路径密钥访问（不弹账号密码框）。
-
-## 模型配置示例
-
-编辑 `/Users/<you>/.orbitclaw/config.json`：
+`~/.lunaeclaw/config.json`
 
 ```json
 {
@@ -146,82 +129,107 @@ WebUI 使用路径密钥访问（不弹账号密码框）。
 }
 ```
 
-密钥写入 `/Users/<you>/.orbitclaw/.env`：
+`~/.lunaeclaw/.env`
 
 ```bash
 OPENAI_API_KEY=sk-xxx
 ```
 
-## MCP 推荐接入
+做一次健康检查：
 
-可参考中文 MCP 聚合清单：
-
-- [Awesome-MCP-ZH](https://github.com/yzfly/Awesome-MCP-ZH?tab=readme-ov-file)
-
-建议接入策略：
-
-1. 只装当前任务必需的 MCP，避免臃肿
-2. 用 `tools.aliases` 固定常用入口（`doc_read`、`image_read`、`code_search`）
-3. 每次新增 MCP 后跑一次 `orbitclaw doctor`
-4. 记录资源影响，再决定是否默认启用
-
-建议提示词模板：
-
-```text
-请按“最小暴露”原则接入 MCP <name>：
-1) 仅开启必要 tools
-2) 为常用能力建立 aliases
-3) 默认禁用非必要能力
-4) 输出配置 diff、健康检查结果和回滚步骤
+```bash
+lunaeclaw doctor
 ```
 
-## 运行目录结构
+## 平台支持
+
+> 目前 CI 只跑 `ubuntu-latest`。其它环境依赖链路是通的，但安装后请务必执行 `lunaeclaw doctor`。
+
+| 平台 | 状态 | 推荐安装路径 | 备注 |
+| --- | --- | --- | --- |
+| Linux 服务器（x86_64/arm64） | 推荐 | Docker Compose | 生产稳定性最好 |
+| macOS（Apple Silicon / Intel） | 推荐 | 本地 `uv` | 开发体验最佳 |
+| Windows | 支持（建议 WSL2） | WSL2 + Ubuntu | 原生 Windows shell 非主路径 |
+| NAS / homelab | 推荐 | Docker Compose | 宿主机挂载便于备份 |
+
+## 渠道支持
+
+| 渠道 | 运行时要求 | 关键配置字段 |
+| --- | --- | --- |
+| Telegram | Python runtime | `channels.telegram.token`, `allowFrom` |
+| Discord | Python runtime | `channels.discord.token`, `allowFrom` |
+| Feishu | Python runtime | `channels.feishu.appId`, `appSecret`, `allowFrom` |
+| DingTalk | Python runtime | `channels.dingtalk.clientId`, `clientSecret`, `allowFrom` |
+| QQ | Python runtime | `channels.qq.appId`, `secret`, `allowFrom` |
+| Slack | Python runtime | `channels.slack.botToken`, `appToken` |
+| WhatsApp | Python + Node.js bridge（`bridge/`，Node 20+） | `channels.whatsapp.bridgeUrl`, 可选 `bridgeToken`, `allowFrom` |
+| Email | Python + IMAP/SMTP | `channels.email.imap*`, `smtp*`, `allowFrom`, `consentGranted` |
+| Mochat | Python runtime | `channels.mochat.baseUrl`, `clawToken`, `allowFrom` |
+
+## 目录树
+
+### 仓库目录
 
 ```text
-orbitclaw/
-├── orbitclaw/          # 运行时核心
-├── assets/             # 品牌资源
-├── docs/public/        # 可公开文档
-├── release/            # 仅公开 baseline
-├── scripts/            # 脚本与质量工具
-└── tests/public/       # 公开回归最小集
+OrbitClaw/
+├── lunaeclaw/              # 运行时代码（app/core/capabilities/platform/services）
+├── bridge/                 # WhatsApp Node.js bridge
+├── tests/public/           # 对外回归测试
+├── docs/public/            # 可公开治理文档
+├── scripts/                # 质量与发布脚本
+├── docker-compose.yml      # 本地近生产部署
+├── Dockerfile              # 运行镜像构建
+└── pyproject.toml          # 依赖与打包元数据
 ```
 
-关键运行目录：
+### 运行时目录
 
-- `/Users/<you>/.orbitclaw/config.json`
-- `/Users/<you>/.orbitclaw/.env`
-- `/Users/<you>/.orbitclaw/env/`
-- `/Users/<you>/.orbitclaw/workspace`
-- `/Users/<you>/.orbitclaw/mcp`
-- `/Users/<you>/.orbitclaw/skills`
-- `/Users/<you>/.orbitclaw/media`
-- `/Users/<you>/.orbitclaw/exports`
+```text
+~/.lunaeclaw/
+├── config.json
+├── .env
+├── env/
+├── workspace/
+├── mcp/
+├── skills/
+├── media/
+├── exports/
+└── bridge/                 # 拷贝并构建后的 WhatsApp bridge
+```
 
-## 后续开发路线（未完成）
+## 运维命令
 
-以下项先不打勾，完成后再改为 `[x]`：
+```bash
+# 查看整体状态
+lunaeclaw status
 
-- [ ] 按可单测职责继续拆分大文件（`cli/commands.py`、`channels/mochat.py`、`channels/feishu.py`）
-- [ ] 渠道管理保持集中，但协议映射与核心业务进一步分层
-- [ ] 发布工程完善（新仓库 main 发版、CI 分支/Tag 闸门）
-- [ ] 依赖瘦身方案（默认最小安装 + 可选渠道扩展）
-- [ ] WebUI 交互整理与视觉升级（在核心机器人稳定后进行）
-- [ ] MCP 推荐库与一键接入说明继续完善
-- [ ] 先持续打磨机器人核心能力，再扩展渠道能力
+# 配置与运行时诊断
+lunaeclaw doctor
 
-## 治理文档
+# 渠道配置状态
+lunaeclaw channels status
 
-- 公开治理文档：`docs/public/governance/`
-- 安全策略：`SECURITY.md`
-- 发布指南：`docs/public/governance/PUBLISHING.md`
-- 开源边界规则：`docs/public/governance/OPEN_SOURCE_RULES.md`
-- Lint 基线：`release/lint-baseline.txt`
-- 公开白名单：`PUBLIC_WHITELIST.md`
+# WhatsApp 登录流程（扫码）
+lunaeclaw channels login
+```
 
-## 上游归因
+## 安全基线
 
-本项目基于 [HKUDS/nanobot](https://github.com/HKUDS/nanobot) 二次开发，并遵循 MIT 兼容许可。
+上线前至少完成：
 
-- 归因详情：`NOTICE`
-- 许可证：`LICENSE`
+- 每个启用渠道都配置 `allowFrom`（空列表 = 默认放行）
+- `~/.lunaeclaw` 设为 `700`，配置/密钥文件设为 `600`
+- 非 root 用户运行
+- 启用 WhatsApp 时设置 `channels.whatsapp.bridgeToken`
+- 按 [SECURITY.md](SECURITY.md) 执行加固
+
+## 致谢
+
+- 上游基础项目：[HKUDS/nanobot](https://github.com/HKUDS/nanobot)
+- 核心依赖库：`litellm`、`pydantic`、`python-telegram-bot`、`websockets`、`@whiskeysockets/baileys`
+
+感谢上游和生态维护者。
+
+## 许可证
+
+MIT，见 [LICENSE](LICENSE)。

@@ -2,265 +2,163 @@
 
 **Language / 语言**: [English](SECURITY.md) | [简体中文](SECURITY.zh-CN.md)
 
-## Reporting a Vulnerability
+---
 
-If you discover a security vulnerability in orbitclaw, please report it by:
+## Quick Start Hardening
 
-1. **DO NOT** open a public GitHub issue
-2. Create a private security advisory on GitHub or contact the repository maintainers (xubinrencs@gmail.com)
-3. Include:
-   - Description of the vulnerability
-   - Steps to reproduce
-   - Potential impact
-   - Suggested fix (if any)
+If you only do 6 things before production, do these:
 
-We aim to respond to security reports within 48 hours.
+1. Set `allowFrom` for every enabled channel (empty means allow-all).
+2. Protect runtime files: `~/.lunaeclaw` = `700`, secrets/config = `600`.
+3. Run as non-root user.
+4. If WhatsApp bridge is enabled, set non-empty `channels.whatsapp.bridgeToken`.
+5. Minimize tool exposure (`tools.enabled`, optional `tools.restrictToWorkspace=true`).
+6. Run dependency audit (`pip-audit`, `npm audit`).
 
-## Security Best Practices
+---
 
-### 1. API Key Management
+## Scope
 
-**CRITICAL**: Never commit API keys to version control.
+This policy applies to:
 
-```bash
-# ✅ Good: Store in config file with restricted permissions
-chmod 600 ~/.orbitclaw/config.json
+- `lunaeclaw` Python runtime (gateway, WebUI, channels, tools)
+- bundled WhatsApp bridge (`bridge/`)
+- default data directory: `~/.lunaeclaw`
 
-# ❌ Bad: Hardcoding keys in code or committing them
-```
+## Security Reality Check (Current Behavior)
 
-**Recommendations:**
-- Store API keys in `~/.orbitclaw/config.json` with file permissions set to `0600`
-- Consider using environment variables for sensitive keys
-- Use OS keyring/credential manager for production deployments
-- Rotate API keys regularly
-- Use separate API keys for development and production
+| Area | Current behavior | Operational risk |
+| --- | --- | --- |
+| Channel auth | `allowFrom` empty means open access (`BaseChannel.is_allowed`) | unauthorized users can interact with bot |
+| WebUI auth | path-token URL, token stored at `~/.lunaeclaw/webui.path-token` | leaked token gives UI access |
+| Health endpoint | `/healthz` reachable without token | low-risk endpoint discovery |
+| Shell tool (`exec`) | deny-pattern guard + timeout, not OS sandbox | still risky under broad host permissions |
+| File tools | traversal protection + optional workspace restriction | broad host permissions still increase blast radius |
 
-### 2. Channel Access Control
+## 10-Minute Baseline Hardening
 
-**IMPORTANT**: Always configure `allowFrom` lists for production use.
+### 1) Restrict channel access
+
+Example:
 
 ```json
 {
   "channels": {
     "telegram": {
       "enabled": true,
-      "token": "YOUR_BOT_TOKEN",
-      "allowFrom": ["123456789", "987654321"]
-    },
-    "whatsapp": {
-      "enabled": true,
-      "allowFrom": ["+1234567890"]
+      "token": "${TELEGRAM_BOT_TOKEN}",
+      "allowFrom": ["123456789"]
     }
   }
 }
 ```
 
-**Security Notes:**
-- Empty `allowFrom` list will **ALLOW ALL** users (open by default for personal use)
-- Get your Telegram user ID from `@userinfobot`
-- Use full phone numbers with country code for WhatsApp
-- Review access logs regularly for unauthorized access attempts
-
-### 3. Shell Command Execution
-
-The `exec` tool can execute shell commands. While dangerous command patterns are blocked, you should:
-
-- ✅ Review all tool usage in agent logs
-- ✅ Understand what commands the agent is running
-- ✅ Use a dedicated user account with limited privileges
-- ✅ Never run orbitclaw as root
-- ❌ Don't disable security checks
-- ❌ Don't run on systems with sensitive data without careful review
-
-**Blocked patterns:**
-- `rm -rf /` - Root filesystem deletion
-- Fork bombs
-- Filesystem formatting (`mkfs.*`)
-- Raw disk writes
-- Other destructive operations
-
-### 4. File System Access
-
-File operations have path traversal protection, but:
-
-- ✅ Run orbitclaw with a dedicated user account
-- ✅ Use filesystem permissions to protect sensitive directories
-- ✅ Regularly audit file operations in logs
-- ❌ Don't give unrestricted access to sensitive files
-
-### 5. Network Security
-
-**API Calls:**
-- All external API calls use HTTPS by default
-- Timeouts are configured to prevent hanging requests
-- Consider using a firewall to restrict outbound connections if needed
-
-**WhatsApp Bridge:**
-- The bridge binds to `127.0.0.1:3001` (localhost only, not accessible from external network)
-- Set `bridgeToken` in config to enable shared-secret authentication between Python and Node.js
-- Keep authentication data in `~/.orbitclaw/whatsapp-auth` secure (mode 0700)
-
-### 6. Dependency Security
-
-**Critical**: Keep dependencies updated!
+### 2) Lock file permissions
 
 ```bash
-# Check for vulnerable dependencies
-pip install pip-audit
-pip-audit
-
-# Update to latest secure versions
-pip install --upgrade orbitclaw-ai
+chmod 700 ~/.lunaeclaw
+chmod 600 ~/.lunaeclaw/config.json
+chmod 600 ~/.lunaeclaw/.env
 ```
 
-For Node.js dependencies (WhatsApp bridge):
+### 3) Use env placeholders for secrets
+
+Store values in env files or secret manager, keep config as `${ENV_VAR}` references.
+
+### 4) Harden WhatsApp bridge when enabled
+
+Facts from code (`bridge/src/server.ts`):
+
+- binds to `127.0.0.1`
+- supports optional token auth (`BRIDGE_TOKEN` / `channels.whatsapp.bridgeToken`)
+- auth state stored in `~/.lunaeclaw/whatsapp-auth`
+
+Set strict permissions:
+
+```bash
+chmod 700 ~/.lunaeclaw/whatsapp-auth
+```
+
+### 5) Minimize tool surface
+
+- keep `tools.enabled` minimal
+- consider `tools.restrictToWorkspace=true`
+- avoid enabling risky tools unless required
+
+### 6) Patch dependencies continuously
+
+Python:
+
+```bash
+pip install pip-audit
+pip-audit
+```
+
+Node.js bridge:
+
 ```bash
 cd bridge
 npm audit
 npm audit fix
 ```
 
-**Important Notes:**
-- Keep `litellm` updated to the latest version for security fixes
-- We've updated `ws` to `>=8.17.1` to fix DoS vulnerability
-- Run `pip-audit` or `npm audit` regularly
-- Subscribe to security advisories for orbitclaw and its dependencies
+## Deployment Profiles
 
-### 7. Production Deployment
+### Profile A: Docker Compose (preferred)
 
-For production use:
+- run gateway + webui in containerized services
+- expose only required ports
+- bind one dedicated runtime directory via `LUNAECLAW_DATA_DIR`
 
-1. **Isolate the Environment**
-   ```bash
-   # Run in a container or VM
-   docker run --rm -it python:3.11
-   pip install orbitclaw-ai
-   ```
+### Profile B: Bare metal / VM
 
-2. **Use a Dedicated User**
-   ```bash
-   sudo useradd -m -s /bin/bash orbitclaw
-   sudo -u orbitclaw orbitclaw gateway
-   ```
+- dedicated service user
+- strict `700/600` permissions
+- host firewall for inbound ports
+- central log collection
 
-3. **Set Proper Permissions**
-   ```bash
-   chmod 700 ~/.orbitclaw
-   chmod 600 ~/.orbitclaw/config.json
-   chmod 700 ~/.orbitclaw/whatsapp-auth
-   ```
+### Profile C: Windows operators
 
-4. **Enable Logging**
-   ```bash
-   # Configure log monitoring
-   tail -f ~/.orbitclaw/logs/orbitclaw.log
-   ```
+- prefer WSL2 or Docker Desktop
+- avoid long-running privileged admin-shell deployment
 
-5. **Use Rate Limiting**
-   - Configure rate limits on your API providers
-   - Monitor usage for anomalies
-   - Set spending limits on LLM APIs
+## Incident Response Runbook
 
-6. **Regular Updates**
-   ```bash
-   # Check for updates weekly
-   pip install --upgrade orbitclaw-ai
-   ```
+1. Revoke compromised API keys.
+2. Stop gateway, WebUI, and bridge.
+3. Review logs and channel access events.
+4. Rotate all secrets in env/config references.
+5. Patch dependencies and redeploy from clean artifacts.
+6. Report details to maintainers.
 
-### 8. Development vs Production
+## Vulnerability Reporting
 
-**Development:**
-- Use separate API keys
-- Test with non-sensitive data
-- Enable verbose logging
-- Use a test Telegram bot
+Report privately:
 
-**Production:**
-- Use dedicated API keys with spending limits
-- Restrict file system access
-- Enable audit logging
-- Regular security reviews
-- Monitor for unusual activity
+1. Do **not** post exploit details in public issues.
+2. Use GitHub private security advisory, or email `xubinrencs@gmail.com`.
+3. Include version/commit, steps to reproduce, impact, and optional fix direction.
 
-### 9. Data Privacy
-
-- **Logs may contain sensitive information** - secure log files appropriately
-- **LLM providers see your prompts** - review their privacy policies
-- **Chat history is stored locally** - protect the `~/.orbitclaw` directory
-- **API keys are in plain text** - use OS keyring for production
-
-### 10. Incident Response
-
-If you suspect a security breach:
-
-1. **Immediately revoke compromised API keys**
-2. **Review logs for unauthorized access**
-   ```bash
-   grep "Access denied" ~/.orbitclaw/logs/orbitclaw.log
-   ```
-3. **Check for unexpected file modifications**
-4. **Rotate all credentials**
-5. **Update to latest version**
-6. **Report the incident** to maintainers
-
-## Security Features
-
-### Built-in Security Controls
-
-✅ **Input Validation**
-- Path traversal protection on file operations
-- Dangerous command pattern detection
-- Input length limits on HTTP requests
-
-✅ **Authentication**
-- Allow-list based access control
-- Failed authentication attempt logging
-- Open by default (configure allowFrom for production use)
-
-✅ **Resource Protection**
-- Command execution timeouts (60s default)
-- Output truncation (10KB limit)
-- HTTP request timeouts (10-30s)
-
-✅ **Secure Communication**
-- HTTPS for all external API calls
-- TLS for Telegram API
-- WhatsApp bridge: localhost-only binding + optional token auth
+Target response time: **within 48 hours**.
 
 ## Known Limitations
 
-⚠️ **Current Security Limitations:**
+- no built-in global message rate limiter
+- open-by-default channel policy unless `allowFrom` is configured
+- secrets can still end up in plain text if operators choose config-only storage
+- `exec` safety is pattern-based guard, not full sandbox isolation
+- security logging exists but is not a full SIEM pipeline
 
-1. **No Rate Limiting** - Users can send unlimited messages (add your own if needed)
-2. **Plain Text Config** - API keys stored in plain text (use keyring for production)
-3. **No Session Management** - No automatic session expiry
-4. **Limited Command Filtering** - Only blocks obvious dangerous patterns
-5. **No Audit Trail** - Limited security event logging (enhance as needed)
+## Pre-Deployment Checklist
 
-## Security Checklist
+- [ ] strict `allowFrom` configured for all enabled channels
+- [ ] runtime permissions hardened (`700/600`)
+- [ ] non-root runtime user enforced
+- [ ] WhatsApp bridge token set (if enabled)
+- [ ] dependency audits completed (`pip-audit`, `npm audit`)
+- [ ] log monitoring and alerting in place
+- [ ] rollback procedure documented and tested
 
-Before deploying orbitclaw:
+## Update Notes
 
-- [ ] API keys stored securely (not in code)
-- [ ] Config file permissions set to 0600
-- [ ] `allowFrom` lists configured for all channels
-- [ ] Running as non-root user
-- [ ] File system permissions properly restricted
-- [ ] Dependencies updated to latest secure versions
-- [ ] Logs monitored for security events
-- [ ] Rate limits configured on API providers
-- [ ] Backup and disaster recovery plan in place
-- [ ] Security review of custom skills/tools
-
-## Updates
-
-**Last Updated**: 2026-02-03
-
-For the latest security updates and announcements, check:
-- GitHub Security Advisories: use your OrbitClaw repository advisories page
-- Release Notes: use your OrbitClaw repository releases page
-
-## License
-
-See LICENSE file for details.
+Last updated: **2026-03-05**

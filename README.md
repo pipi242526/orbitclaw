@@ -1,16 +1,15 @@
 <div align="center">
-  <img src="assets/orbitclaw-banner.svg" alt="OrbitClaw banner" width="920" />
+  <img src="assets/lunaeclaw-banner.svg" alt="LunaeClaw banner" width="920" />
 
-# OrbitClaw
+# LunaeClaw
 
-**Practical lightweight agent runtime for Telegram-first automation and local ops**
+**Production-minded multi-channel agent runtime**
 
 <p>
   <img src="https://img.shields.io/badge/Python-3.11%2B-3776AB?style=flat&logo=python&logoColor=white" alt="Python" />
+  <img src="https://img.shields.io/badge/Node.js-20%2B-339933?style=flat&logo=nodedotjs&logoColor=white" alt="Node.js" />
   <img src="https://img.shields.io/badge/License-MIT-16a34a?style=flat" alt="License" />
   <img src="https://img.shields.io/badge/Version-0.1.1-0ea5e9?style=flat" alt="Version" />
-  <img src="https://img.shields.io/badge/Profile-1C1G%20friendly-0f766e?style=flat" alt="Profile" />
-  <img src="https://img.shields.io/badge/Status-Release%20Candidate-f97316?style=flat" alt="Status" />
 </p>
 
 **Language / 语言**: [English](README.md) | [简体中文](README.zh-CN.md)
@@ -19,111 +18,95 @@
 
 ---
 
-## Why This Exists
+<div align="center">
 
-OrbitClaw is an independently maintained secondary-development runtime built for:
+[Overview](#overview) • [Install](#install) • [Platform Support](#platform-support) • [Channel Support](#channel-support) • [Directory Trees](#directory-trees) • [Operations](#operations) • [Security Baseline](#security-baseline)
 
-- Chinese-first daily usage, Telegram-first operations
-- low and predictable resource usage on small hosts
-- clear extension boundaries for channels, MCP, and skills
-- practical WebUI + CLI workflow for deployment and maintenance
+</div>
 
-## Table of Contents
+## Overview
 
-- [Core Capabilities](#core-capabilities)
-- [Quick Start](#quick-start)
-- [Provider Configuration Example](#provider-configuration-example)
-- [MCP Recommendations](#mcp-recommendations)
-- [Runtime Layout](#runtime-layout)
-- [Development Roadmap (Open)](#development-roadmap-open)
-- [Governance](#governance)
-- [Upstream Attribution](#upstream-attribution)
+LunaeClaw is built for operators who need an agent runtime they can actually deploy and maintain, not just demo.
 
-## OrbitClaw Advantages
+| What you get | Why it matters |
+| --- | --- |
+| `lunaeclaw gateway` | Long-running service loop for real traffic |
+| `lunaeclaw webui` | Visual config and diagnostics without rewriting JSON by hand |
+| Multi-channel adapters | One runtime across Telegram/Discord/Feishu/DingTalk/QQ/Slack/WhatsApp/Email/Mochat |
+| MCP + Skills + aliases | Keep workflows customizable without forking core logic |
+| `status` + `doctor` | Fast diagnostics when something breaks |
 
-### 1) Built for real usage, not demos
+> [!TIP]
+> No channel is hardcoded as “the only first-class path”. Enable only what your deployment needs.
 
-- default behavior is tuned for practical chat operations (especially Telegram)
-- errors are returned with actionable fix hints, not raw stack noise
-- output policy reduces tool-detail leakage in user-facing replies
+## Install
 
-### 2) Lightweight by default
+### Choose your path
 
-- designed around 1C1G-friendly runtime budgets
-- queue caps, timeout caps, and context budgets are first-class config fields
-- optional integrations stay optional instead of bloating core paths
+| Scenario | Recommendation |
+| --- | --- |
+| Local development (macOS/Linux) | `uv sync --extra dev` |
+| Windows workstation | WSL2 + Ubuntu + `uv` |
+| Server / NAS / homelab | Docker Compose |
+| Minimal editable install | `pip install -e .` |
 
-### 3) Better long-term maintainability
+### Local development (macOS/Linux)
 
-- core loop and extension points are separated by design
-- MCP/skill changes can be done through config and aliases
-- diagnostics + tests are integrated into daily workflow (`status`, `doctor`, pytest)
-
-### 4) Chinese-first but not locale-locked
-
-- Chinese UX defaults for common usage paths
-- bilingual docs and i18n-ready UI structure for future language expansion
-
-## Core Capabilities
-
-### 1) Bot Runtime (priority)
-
-- unified chat processing loop with command routing
-- unified output post-processing (language + safe output + failure guidance)
-- session and context budget controls (history, memory, background, inline media)
-- queue and timeout limits for predictable behavior under load
-
-### 2) Tools and Skills
-
-- built-in tools for web fetch/search, file operations, shell execution
-- alias mapping (`tools.aliases`) to swap underlying tools without changing prompt habits
-- MCP filters (`mcp_enabled_servers/tools`, `mcp_disabled_servers/tools`) for precise exposure control
-
-### 3) Multi-channel adapters
-
-- Telegram recommended as default channel
-- additional adapters: Discord / Feishu / DingTalk / QQ / Slack / WhatsApp / Email / Mochat
-- adapters map protocol differences; runtime behavior stays in core logic
-
-### 4) Ops and diagnostics
-
-- `orbitclaw status` + `orbitclaw doctor`
-- WebUI for models/APIs, channels, MCP, skills, media
-- Docker deployment with shared runtime directory requirements
-
-## Quick Start
-
-### 1) Install
+Prerequisites: Python `3.11+`, `uv`; Node.js `20+` only if enabling WhatsApp bridge.
 
 ```bash
-git clone <your-orbitclaw-repo-url>
-cd orbitclaw
+git clone <your-repo-url>
+cd OrbitClaw
+uv sync --extra dev
+uv run lunaeclaw onboard
+uv run lunaeclaw gateway
+# another shell
+uv run lunaeclaw webui --host 0.0.0.0 --port 18791
+```
+
+### Windows via WSL2 (recommended)
+
+```bash
+# inside Ubuntu (WSL2)
+sudo apt update
+sudo apt install -y curl git python3 python3-venv python3-pip
+curl -LsSf https://astral.sh/uv/install.sh | sh
+
+git clone <your-repo-url>
+cd OrbitClaw
+uv sync --extra dev
+uv run lunaeclaw onboard
+uv run lunaeclaw gateway
+```
+
+### Docker Compose (server-friendly)
+
+```bash
+git clone <your-repo-url>
+cd OrbitClaw
+mkdir -p ./.lunaeclaw-data
+docker compose up -d --build lunaeclaw-gateway lunaeclaw-webui
+docker compose logs -f --tail=200
+```
+
+Default ports:
+
+- Gateway `18790`
+- WebUI `18791`
+
+### Minimal editable install
+
+```bash
+git clone <your-repo-url>
+cd OrbitClaw
 pip install -e .
+lunaeclaw onboard
+lunaeclaw gateway
 ```
 
-### 2) Bootstrap
+### First provider config
 
-```bash
-orbitclaw onboard
-```
-
-### 3) Start gateway
-
-```bash
-orbitclaw gateway
-```
-
-### 4) Start WebUI
-
-```bash
-orbitclaw webui --host 0.0.0.0 --port 18791
-```
-
-WebUI is protected by a path token (no username/password popup).
-
-## Provider Configuration Example
-
-Edit `/Users/<you>/.orbitclaw/config.json`:
+`~/.lunaeclaw/config.json`
 
 ```json
 {
@@ -146,80 +129,107 @@ Edit `/Users/<you>/.orbitclaw/config.json`:
 }
 ```
 
-Put secrets in `/Users/<you>/.orbitclaw/.env`:
+`~/.lunaeclaw/.env`
 
 ```bash
 OPENAI_API_KEY=sk-xxx
 ```
 
-## MCP Recommendations
+Run a health check:
 
-For Chinese MCP discovery and category browsing, use:
-
-- [Awesome-MCP-ZH](https://github.com/yzfly/Awesome-MCP-ZH?tab=readme-ov-file)
-
-Recommended integration style in OrbitClaw:
-
-1. keep runtime lean: install only task-relevant MCP servers
-2. map stable aliases in `tools.aliases` (`doc_read`, `image_read`, `code_search`)
-3. verify with `orbitclaw doctor` after each MCP addition
-4. record resource impact before keeping it enabled by default
-
-Prompt template for adding a new MCP safely:
-
-```text
-Add MCP server "<name>" with minimum required tools only.
-Then add aliases for common tasks and keep all other tools disabled by default.
-Finally, run a health check and report config diff + rollback steps.
+```bash
+lunaeclaw doctor
 ```
 
-## Runtime Layout
+## Platform Support
+
+> Current CI is `ubuntu-latest`. Other environments are supported by dependency/runtime design and common operator usage; always run `lunaeclaw doctor` after setup.
+
+| Platform | Status | Best install path | Notes |
+| --- | --- | --- | --- |
+| Linux server (x86_64/arm64) | Recommended | Docker Compose | Predictable production footprint |
+| macOS (Apple Silicon/Intel) | Recommended | Local `uv` | Best DX for iteration |
+| Windows | Supported (WSL2 recommended) | WSL2 + Ubuntu | Native Windows shell is not primary path |
+| NAS/homelab | Recommended | Docker Compose | Host-mounted data directory simplifies backup |
+
+## Channel Support
+
+| Channel | Runtime requirement | Key config fields |
+| --- | --- | --- |
+| Telegram | Python runtime | `channels.telegram.token`, `allowFrom` |
+| Discord | Python runtime | `channels.discord.token`, `allowFrom` |
+| Feishu | Python runtime | `channels.feishu.appId`, `appSecret`, `allowFrom` |
+| DingTalk | Python runtime | `channels.dingtalk.clientId`, `clientSecret`, `allowFrom` |
+| QQ | Python runtime | `channels.qq.appId`, `secret`, `allowFrom` |
+| Slack | Python runtime | `channels.slack.botToken`, `appToken` |
+| WhatsApp | Python + Node.js bridge (`bridge/`, Node 20+) | `channels.whatsapp.bridgeUrl`, optional `bridgeToken`, `allowFrom` |
+| Email | Python + IMAP/SMTP | `channels.email.imap*`, `smtp*`, `allowFrom`, `consentGranted` |
+| Mochat | Python runtime | `channels.mochat.baseUrl`, `clawToken`, `allowFrom` |
+
+## Directory Trees
+
+### Repository tree
 
 ```text
-orbitclaw/
-├── orbitclaw/          # runtime core
-├── assets/             # brand assets
-├── docs/public/        # publishable docs
-├── release/            # public baseline only
-├── scripts/            # quality and release scripts
-└── tests/public/       # public regression subset
+OrbitClaw/
+├── lunaeclaw/              # runtime source (app/core/capabilities/platform/services)
+├── bridge/                 # WhatsApp Node.js bridge
+├── tests/public/           # public regression tests
+├── docs/public/            # publishable governance docs
+├── scripts/                # quality/release helper scripts
+├── docker-compose.yml      # local production-like deployment
+├── Dockerfile              # runtime image build
+└── pyproject.toml          # package metadata + dependencies
 ```
 
-Key runtime paths:
+### Runtime data tree
 
-- `/Users/<you>/.orbitclaw/config.json`
-- `/Users/<you>/.orbitclaw/.env`
-- `/Users/<you>/.orbitclaw/env/`
-- `/Users/<you>/.orbitclaw/workspace`
-- `/Users/<you>/.orbitclaw/mcp`
-- `/Users/<you>/.orbitclaw/skills`
-- `/Users/<you>/.orbitclaw/media`
-- `/Users/<you>/.orbitclaw/exports`
+```text
+~/.lunaeclaw/
+├── config.json
+├── .env
+├── env/
+├── workspace/
+├── mcp/
+├── skills/
+├── media/
+├── exports/
+└── bridge/                 # copied/compiled WhatsApp bridge runtime
+```
 
-## Development Roadmap (Open)
+## Operations
 
-These are intentionally unchecked; mark them only when done.
+```bash
+# overall runtime status
+lunaeclaw status
 
-- [ ] Split large modules by testable responsibilities (`cli/commands.py`, `channels/mochat.py`, `channels/feishu.py`)
-- [ ] Keep channels centralized for management while separating protocol mapping from runtime business logic
-- [ ] Improve release engineering flow (`main`-only product release, stronger CI branch/tag gates)
-- [ ] Dependency slimming plan (default minimal install + optional channel extras)
-- [ ] WebUI visual cleanup and interaction polish (after core bot behavior milestones)
-- [ ] Expand MCP recommendation library and one-click install guidance
-- [ ] Continue core-bot reliability passes before new channel features
+# config/runtime diagnostics
+lunaeclaw doctor
 
-## Governance
+# per-channel config status
+lunaeclaw channels status
 
-- Public governance docs: `docs/public/governance/`
-- Security policy: `SECURITY.md`
-- Publishing guide: `docs/public/governance/PUBLISHING.md`
-- Open-source boundary rules: `docs/public/governance/OPEN_SOURCE_RULES.md`
-- Lint baseline: `release/lint-baseline.txt`
-- Public whitelist: `PUBLIC_WHITELIST.md`
+# WhatsApp bridge login flow
+lunaeclaw channels login
+```
 
-## Upstream Attribution
+## Security Baseline
 
-This project is based on [HKUDS/nanobot](https://github.com/HKUDS/nanobot) and distributed under MIT-compatible terms.
+Before exposing the runtime to real users:
 
-- details: `NOTICE`
-- license: `LICENSE`
+- configure `allowFrom` on every enabled channel (empty list means open access)
+- set file permissions: `~/.lunaeclaw` as `700`, config/env as `600`
+- run with a non-root user
+- if WhatsApp is enabled, set `channels.whatsapp.bridgeToken`
+- apply [SECURITY.md](SECURITY.md)
+
+## Acknowledgements
+
+- Upstream foundation: [HKUDS/nanobot](https://github.com/HKUDS/nanobot)
+- Core libraries used heavily: `litellm`, `pydantic`, `python-telegram-bot`, `websockets`, `@whiskeysockets/baileys`
+
+Thanks to upstream and ecosystem maintainers.
+
+## License
+
+MIT. See [LICENSE](LICENSE).
