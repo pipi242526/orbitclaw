@@ -18,6 +18,12 @@ make export-public
 make test-internal
 ```
 
+Server verification tips:
+
+- `verify-server` / `verify-server-acceptance` follow `${LUNAECLAW_HOST_DATA_DIR:-${LUNAECLAW_DATA_DIR:-<repo>/.lunaeclaw-data}}` on the remote host.
+- For first-time setup without provider keys, `verify-server-acceptance` can allow gateway `waiting_config`:
+  - `ALLOW_WAITING_CONFIG=1 make verify-server-acceptance`
+
 Cache cleanup:
 
 - `make test`, `make quality`, and `make verify-local` run `tests/public` and automatically clear `.pytest_cache`, `.ruff_cache`, and `__pycache__` on exit.

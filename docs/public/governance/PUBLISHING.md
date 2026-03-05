@@ -15,6 +15,7 @@ This repository is intended to publish only reusable runtime code and selected p
 - Personal planning notes and debugging scratch files
 - Local override configs (`*.local.*`, `config.local.json`)
 - Temporary run artifacts (`tmp/`, local logs, ad-hoc exports)
+- Runtime bind-mount data (`.lunaeclaw-data/`)
 - Internal docs and checklists (`docs/internal/`, `release/internal/`)
 - Internal tests (`tests/internal/`)
 

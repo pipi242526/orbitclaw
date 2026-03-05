@@ -123,7 +123,9 @@ class TelegramChannel(BaseChannel):
         BotCommand("start", "Start the bot"),
         BotCommand("new", "Start a new conversation"),
         BotCommand("help", "Show available commands"),
+        BotCommand("whoami", "Show your Telegram sender ID"),
     ]
+    _TOKEN_PATTERN = re.compile(r"^[0-9]{6,}:[A-Za-z0-9_-]{20,}$")
 
     def __init__(
         self,
@@ -141,17 +143,23 @@ class TelegramChannel(BaseChannel):
 
     async def start(self) -> None:
         """Start the Telegram bot with long polling."""
-        if not self.config.token:
-            logger.error("Telegram bot token not configured")
+        token_text = self._prepare_credential("token", self.config.token, required=True)
+        if not token_text:
             return
+        self.config.token = token_text
+        if not self._TOKEN_PATTERN.match(token_text):
+            logger.error("Telegram bot token format invalid after sanitize (expected <digits>:<token>)")
+            return
+        proxy_text = self._prepare_credential("proxy", self.config.proxy, required=False) if self.config.proxy else None
+        self.config.proxy = proxy_text
 
         self._running = True
 
         # Build the application with larger connection pool to avoid pool-timeout on long runs
         req = HTTPXRequest(connection_pool_size=16, pool_timeout=5.0, connect_timeout=30.0, read_timeout=30.0)
-        builder = Application.builder().token(self.config.token).request(req).get_updates_request(req)
-        if self.config.proxy:
-            builder = builder.proxy(self.config.proxy).get_updates_proxy(self.config.proxy)
+        builder = Application.builder().token(token_text).request(req).get_updates_request(req)
+        if proxy_text:
+            builder = builder.proxy(proxy_text).get_updates_proxy(proxy_text)
         self._app = builder.build()
         self._app.add_error_handler(self._on_error)
 
@@ -159,6 +167,7 @@ class TelegramChannel(BaseChannel):
         self._app.add_handler(CommandHandler("start", self._on_start))
         self._app.add_handler(CommandHandler("new", self._forward_command))
         self._app.add_handler(CommandHandler("help", self._on_help))
+        self._app.add_handler(CommandHandler("whoami", self._on_whoami))
         self._app.add_handler(CallbackQueryHandler(self._on_callback_query))
 
         # Add message handler for text, photos, voice, documents
@@ -398,6 +407,11 @@ class TelegramChannel(BaseChannel):
         await query.answer("Received", show_alert=False)
         sender = update.effective_user
         sender_id = self._sender_id(sender) if sender else "unknown"
+        if not self.is_allowed(sender_id):
+            await query.answer("Not allowed", show_alert=True)
+            if message:
+                await self._reply_access_denied(message, sender_id)
+            return
         action = entry.get("payload", {})
         content = str(action.get("prompt") or action.get("value") or action.get("title") or action.get("id") or "")
         if not content:
@@ -443,7 +457,23 @@ class TelegramChannel(BaseChannel):
         await update.message.reply_text(
             "🐈 lunaeclaw commands:\n"
             "/new — Start a new conversation\n"
-            "/help — Show available commands"
+            "/help — Show available commands\n"
+            "/whoami — Show your sender ID (for allowFrom)"
+        )
+
+    async def _on_whoami(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Show sender id/username for allowFrom troubleshooting."""
+        _ = context
+        if not update.message or not update.effective_user:
+            return
+        user = update.effective_user
+        sender_id = self._sender_id(user)
+        chat_type = update.message.chat.type if update.message.chat else "unknown"
+        await update.message.reply_text(
+            "Your sender_id:\n"
+            f"{sender_id}\n\n"
+            "Use either numeric ID or username in allowFrom.\n"
+            f"chat_type={chat_type}"
         )
 
     @staticmethod
@@ -454,12 +484,17 @@ class TelegramChannel(BaseChannel):
 
     async def _forward_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Forward slash commands to the bus for unified handling in AgentLoop."""
+        _ = context
         if not update.message or not update.effective_user:
             return
         message = update.message
         user = update.effective_user
+        sender_id = self._sender_id(user)
+        if not self.is_allowed(sender_id):
+            await self._reply_access_denied(message, sender_id)
+            return
         await self._handle_message(
-            sender_id=self._sender_id(user),
+            sender_id=sender_id,
             chat_id=str(message.chat_id),
             content=message.text,
             metadata={
@@ -474,6 +509,7 @@ class TelegramChannel(BaseChannel):
 
     async def _on_message(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Handle incoming messages (text, photos, voice, documents)."""
+        _ = context
         if not update.message or not update.effective_user:
             return
 
@@ -481,6 +517,9 @@ class TelegramChannel(BaseChannel):
         user = update.effective_user
         chat_id = message.chat_id
         sender_id = self._sender_id(user)
+        if not self.is_allowed(sender_id):
+            await self._reply_access_denied(message, sender_id)
+            return
 
         # Store chat_id for replies
         self._chat_ids[sender_id] = chat_id
@@ -617,6 +656,23 @@ class TelegramChannel(BaseChannel):
     async def _on_error(self, update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Log polling / handler errors instead of silently swallowing them."""
         logger.error("Telegram error: {}", context.error)
+
+    async def _reply_access_denied(self, message, sender_id: str) -> None:
+        """Return explicit ACL denial message instead of silent drop."""
+        try:
+            allow = [str(x).strip() for x in (self.config.allow_from or []) if str(x).strip()]
+            allow_preview = ", ".join(allow[:8]) if allow else "(empty)"
+            if len(allow) > 8:
+                allow_preview += ", ..."
+            await message.reply_text(
+                "未授权访问。\n"
+                f"sender_id={sender_id}\n"
+                "请将上面的 sender_id（或用户名）加入 allowFrom 后重试。\n"
+                f"当前 allowFrom={allow_preview}"
+            )
+            logger.warning("Access denied for sender {} on channel telegram", sender_id)
+        except Exception as e:
+            logger.warning("Failed to send ACL denial tip: {}", e)
 
     def _get_extension(self, media_type: str, mime_type: str | None) -> str:
         """Get file extension based on media type."""

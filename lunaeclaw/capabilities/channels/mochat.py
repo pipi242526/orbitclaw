@@ -110,9 +110,21 @@ class MochatChannel(BaseChannel):
 
     async def start(self) -> None:
         """Start Mochat channel workers and websocket connection."""
-        if not self.config.claw_token:
-            logger.error("Mochat claw_token not configured")
+        claw_token = self._prepare_credential("claw_token", self.config.claw_token, required=True)
+        if not claw_token:
             return
+        self.config.claw_token = claw_token
+        base_url = self._prepare_credential("base_url", self.config.base_url, required=True)
+        if not base_url:
+            return
+        self.config.base_url = base_url
+        self.config.socket_url = self._prepare_credential("socket_url", self.config.socket_url, required=False) or ""
+        self.config.socket_path = (
+            self._prepare_credential("socket_path", self.config.socket_path, required=False) or "/socket.io"
+        )
+        self.config.agent_user_id = self._prepare_credential(
+            "agent_user_id", self.config.agent_user_id, required=False
+        ) or ""
 
         self._running = True
         self._http = httpx.AsyncClient(timeout=30.0)

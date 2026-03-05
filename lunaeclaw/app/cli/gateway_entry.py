@@ -18,6 +18,30 @@ from lunaeclaw.app.cli.runtime_wiring import (
 from lunaeclaw.platform.config.schema import Config
 
 
+def _format_wait_reason(exc: Exception) -> str:
+    """Format startup/reload failures into user-actionable waiting reasons."""
+    try:
+        from click.exceptions import Exit as ClickExit
+
+        if isinstance(exc, ClickExit):
+            exit_code = getattr(exc, "exit_code", 1)
+            return (
+                "provider/model config invalid: missing API key or endpoint; "
+                "update ~/.lunaeclaw/config.json and env files "
+                f"(exit={exit_code})"
+            )
+    except Exception:  # pragma: no cover
+        pass
+
+    text = str(exc).strip()
+    if not text or text.isdigit():
+        return (
+            "provider/model config invalid: missing API key or endpoint; "
+            "update ~/.lunaeclaw/config.json and env files"
+        )
+    return text
+
+
 def gateway_state_heartbeat_seconds() -> float:
     """Heartbeat interval for writing `running` gateway state file updates."""
     raw = (os.environ.get("LUNAECLAW_GATEWAY_STATE_HEARTBEAT_SECONDS") or "4.0").strip()
@@ -97,7 +121,7 @@ def gateway_command(
             except Exception as exc:
                 fingerprint = compute_runtime_config_fingerprint(config_path)
                 failed_fingerprint = fingerprint
-                reason = str(exc).strip() or exc.__class__.__name__
+                reason = _format_wait_reason(exc)
                 logger.warning("Gateway runtime waiting for valid config/dependencies: {}", reason)
                 console.print(f"[yellow]Gateway waiting for valid config[/yellow]: {reason}")
                 _write_state(status="waiting_config", note=reason)
@@ -114,7 +138,7 @@ def gateway_command(
             except Exception as exc:
                 fingerprint = compute_runtime_config_fingerprint(config_path)
                 failed_fingerprint = fingerprint
-                reason = str(exc).strip() or exc.__class__.__name__
+                reason = _format_wait_reason(exc)
                 logger.warning("Gateway config snapshot invalid: {}", reason)
                 console.print(f"[yellow]Gateway waiting for valid config[/yellow]: {reason}")
                 _write_state(status="waiting_config", note=reason)
@@ -131,7 +155,7 @@ def gateway_command(
                         next_config = _load_config_snapshot()
                     except Exception as exc:
                         failed_fingerprint = next_fingerprint
-                        reason = str(exc).strip() or exc.__class__.__name__
+                        reason = _format_wait_reason(exc)
                         logger.warning("Gateway still waiting for valid config snapshot: {}", reason)
                         _write_state(status="waiting_config", note=reason)
                         continue

@@ -10,6 +10,7 @@ from urllib.parse import urlparse
 from lunaeclaw.app.webui.catalog import find_skill_library_entry, install_skill_from_library
 from lunaeclaw.app.webui.common import (
     _MAX_SKILL_IMPORT_BYTES,
+    _collect_skill_rows,
     _is_private_or_local_host,
     _safe_json_object,
 )
@@ -63,9 +64,23 @@ def handle_post_skills(handler: Any, form: dict[str, list[str]]) -> None:
         if not name:
             raise ValueError(t("skill_name is required", "skill_name 必填"))
         enabled_now = toggle_skill(cfg, name)
-        msg = t("Skill enabled: {name}", "技能已启用: {name}") if enabled_now else t("Skill paused: {name}", "技能已暂停: {name}")
+        msg = (
+            t("Skill enabled: {name}", "技能已启用: {name}").format(name=name)
+            if enabled_now
+            else t("Skill paused: {name}", "技能已暂停: {name}").format(name=name)
+        )
+        if enabled_now:
+            rows = {str(row.get("name") or ""): row for row in _collect_skill_rows(cfg)}
+            current = rows.get(name)
+            if current and not bool(current.get("available")):
+                requires = str(current.get("requires") or "").strip()
+                reason = requires or t("install required dependencies", "请安装缺失依赖")
+                msg = t(
+                    "Skill enabled but unavailable: {name} ({reason})",
+                    "技能已启用但当前不可用: {name}（{reason}）",
+                ).format(name=name, reason=reason)
         handler._save_config(cfg)
-        handler._redirect("/skills", msg=msg.format(name=name))
+        handler._redirect("/skills", msg=msg)
         return
 
     if action == "import_skill_from_url":

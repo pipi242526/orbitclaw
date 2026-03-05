@@ -107,20 +107,25 @@ def build_skill_rows(cfg: Any) -> list[dict[str, Any]]:
 
 def build_skill_library_rows(cfg: Any, skill_rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
     known_skills = {str(s["name"]) for s in skill_rows}
+    disabled_values = getattr(getattr(cfg, "skills", None), "disabled", []) or []
+    disabled_skills = {str(s).strip() for s in disabled_values if str(s).strip()}
     rows: list[dict[str, Any]] = []
     for item in _SKILL_LIBRARY:
         name = str(item["name"])
         exists = name in known_skills
-        row = next((x for x in skill_rows if str(x["name"]) == name), None)
         global_skill_file = get_global_skills_path() / name / "SKILL.md"
+        global_installed = global_skill_file.exists()
+        health = evaluate_skill_library_health(cfg, item, skill_rows)
+        if global_installed and (name in disabled_skills) and str(health.get("status") or "") != "disabled":
+            health = {"status": "disabled", "label": "disabled", "hint": "enable in selection"}
         rows.append(
             {
                 "item": item,
                 "name": name,
                 "exists": exists,
-                "skill_enabled": bool(row and not row.get("disabled")),
-                "global_installed": global_skill_file.exists(),
-                "health": evaluate_skill_library_health(cfg, item, skill_rows),
+                "skill_enabled": (name not in disabled_skills) and exists,
+                "global_installed": global_installed,
+                "health": health,
             }
         )
     return rows
@@ -153,13 +158,34 @@ def build_channel_quick_models(cfg: Any, cfg_resolved: Any) -> dict[str, Any]:
             if key.endswith(suffix):
                 env_prefix = key[: -len(suffix)]
                 break
+        first_env_suffix = str(env_fields[0]["env_suffix"]) if env_fields else ""
+        env_key_name = f"{env_prefix}_{first_env_suffix}" if first_env_suffix else env_prefix
+        default_env_key_name = (
+            f"{str(spec['env_prefix'])}_{first_env_suffix}" if first_env_suffix else str(spec["env_prefix"])
+        )
 
         allow_field = str(spec["allow_field"])
         allow_raw = list(_get_nested_attr(raw_channel, allow_field) or [])
         allow_resolved = list(_get_nested_attr(resolved_channel, allow_field) or [])
-        allow_mode = "env_placeholders" if (allow_raw and all(_is_env_placeholder(x) for x in allow_raw)) else "plain"
-        allow_prefix = _derive_env_prefix_from_placeholders(allow_raw, str(spec["allow_env_prefix"]))
-        allow_csv = ", ".join(allow_resolved if (allow_mode == "env_placeholders" and allow_resolved) else allow_raw)
+        allow_sample_values = [str(x).strip() for x in allow_raw if str(x).strip()]
+        allow_mode = (
+            "env_placeholders"
+            if (allow_sample_values and all(_is_env_placeholder(x) for x in allow_sample_values))
+            else "plain"
+        )
+        allow_prefix = _derive_env_prefix_from_placeholders(allow_sample_values, str(spec["allow_env_prefix"]))
+        allow_placeholder = ", ".join(allow_sample_values) if allow_mode == "env_placeholders" else ""
+        if allow_mode == "env_placeholders":
+            resolved_values = [
+                str(x).strip() for x in allow_resolved if str(x).strip() and not _is_env_placeholder(str(x).strip())
+            ]
+            # Keep unresolved placeholder examples out of input value.
+            allow_csv = ", ".join(resolved_values) if resolved_values else ""
+        else:
+            allow_csv = ", ".join([x for x in allow_sample_values if not _is_env_placeholder(x)])
+        allow_clear_on_focus = bool(allow_placeholder) and (not allow_csv or allow_csv == allow_placeholder)
+        allow_key_name = f"{allow_prefix}_1"
+        default_allow_key_name = f"{str(spec['allow_env_prefix'])}_1"
 
         fields: list[dict[str, str | bool]] = []
         for field in spec["fields"]:
@@ -167,10 +193,18 @@ def build_channel_quick_models(cfg: Any, cfg_resolved: Any) -> dict[str, Any]:
             input_name = f"ch_{sid}_{path.replace('.', '__')}"
             raw_value = str(_get_nested_attr(raw_channel, path) or "")
             display_value = raw_value
+            clear_on_focus = False
+            sample_value = ""
             if not bool(field.get("secret")) and _is_env_placeholder(raw_value):
                 resolved_value = str(_get_nested_attr(resolved_channel, path) or "")
                 if resolved_value:
                     display_value = resolved_value
+                else:
+                    clear_on_focus = True
+                    sample_value = raw_value
+            elif _is_env_placeholder(raw_value):
+                clear_on_focus = True
+                sample_value = raw_value
             env_hint = f"${{{env_prefix}_{field['env_suffix']}}}" if field.get("env_suffix") else ""
             fields.append(
                 {
@@ -178,6 +212,8 @@ def build_channel_quick_models(cfg: Any, cfg_resolved: Any) -> dict[str, Any]:
                     "input_name": input_name,
                     "display_value": display_value,
                     "env_hint": env_hint,
+                    "clear_on_focus": clear_on_focus,
+                    "sample_value": sample_value,
                     "label_en": str(field["label_en"]),
                     "label_zh": str(field["label_zh"]),
                 }
@@ -191,9 +227,15 @@ def build_channel_quick_models(cfg: Any, cfg_resolved: Any) -> dict[str, Any]:
                 "enabled": bool(getattr(raw_channel, "enabled", False)),
                 "auth_mode": auth_mode,
                 "env_prefix": env_prefix,
+                "env_key_name": env_key_name,
+                "default_env_key_name": default_env_key_name,
                 "allow_mode": allow_mode,
                 "allow_prefix": allow_prefix,
+                "allow_key_name": allow_key_name,
+                "default_allow_key_name": default_allow_key_name,
                 "allow_csv": allow_csv,
+                "allow_placeholder": allow_placeholder,
+                "allow_clear_on_focus": allow_clear_on_focus,
                 "default_env_prefix": str(spec["env_prefix"]),
                 "default_allow_env_prefix": str(spec["allow_env_prefix"]),
                 "fields": fields,

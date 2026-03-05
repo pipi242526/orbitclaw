@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from html import escape
 from typing import Any
 
 from lunaeclaw.app.webui.common import (
@@ -10,6 +9,7 @@ from lunaeclaw.app.webui.common import (
     _REPLY_LANGUAGE_CODES,
     _pretty_json,
 )
+from lunaeclaw.app.webui.html_utils import escape
 from lunaeclaw.app.webui.i18n import reply_language_label as _reply_language_label
 from lunaeclaw.app.webui.i18n import ui_copy as _ui_copy
 from lunaeclaw.app.webui.icons import icon_svg

@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
+import json
 import os
 import re
 import secrets
 import threading
 import webbrowser
-from html import escape
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
@@ -25,6 +25,7 @@ from lunaeclaw.app.webui.diagnostics import (
     collect_tool_policy_diagnostics as _collect_tool_policy_diagnostics_impl,
 )
 from lunaeclaw.app.webui.handlers import dispatch_post_route as _dispatch_post_route
+from lunaeclaw.app.webui.html_utils import escape
 from lunaeclaw.app.webui.i18n import (
     UI_LANGUAGE_CHOICES as _UI_LANGUAGE_CHOICES,
 )
@@ -246,6 +247,28 @@ def run_webui(
             self.end_headers()
             if not head_only:
                 self.wfile.write(data)
+
+        def _send_sse_headers(self, status: int = 200) -> None:
+            self.send_response(status)
+            self.send_header("Content-Type", "text/event-stream; charset=utf-8")
+            self.send_header("Cache-Control", "no-cache")
+            self.send_header("Connection", "keep-alive")
+            self.send_header("X-Accel-Buffering", "no")
+            self.end_headers()
+
+        def _send_sse_event(self, event: str, payload: dict[str, Any] | str) -> None:
+            if isinstance(payload, dict):
+                data = json.dumps(payload, ensure_ascii=False)
+            else:
+                data = str(payload)
+            body = f"event: {event}\ndata: {data}\n\n"
+            self.wfile.write(body.encode("utf-8"))
+            self.wfile.flush()
+
+        def _send_sse_comment(self, text: str = "") -> None:
+            body = f": {text}\n\n"
+            self.wfile.write(body.encode("utf-8"))
+            self.wfile.flush()
 
         def _route_path(self, raw_path: str) -> str | None:
             if not path_prefix:

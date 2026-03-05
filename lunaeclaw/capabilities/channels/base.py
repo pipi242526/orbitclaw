@@ -1,5 +1,6 @@
 """Base channel interface for chat platforms."""
 
+import re
 from abc import ABC, abstractmethod
 from typing import Any
 
@@ -18,6 +19,8 @@ class BaseChannel(ABC):
     """
 
     name: str = "base"
+    _ENV_PLACEHOLDER_RE = re.compile(r"^\$\{[A-Za-z_][A-Za-z0-9_]*\}$")
+    _INVISIBLE_CHARS = ("\u200b", "\u200c", "\u200d", "\ufeff")
 
     def __init__(self, config: Any, bus: MessageBus):
         """
@@ -58,6 +61,43 @@ class BaseChannel(ABC):
         """
         pass
 
+    def _prepare_credential(self, field_name: str, value: Any, *, required: bool = True) -> str | None:
+        """
+        Normalize credential-like config values and detect unresolved placeholders.
+
+        - strips leading/trailing whitespace
+        - removes common invisible copy/paste chars (ZWSP/BOM)
+        - blocks unresolved ${ENV_VAR} placeholders
+        """
+        raw = "" if value is None else str(value)
+        normalized = raw
+        for ch in self._INVISIBLE_CHARS:
+            normalized = normalized.replace(ch, "")
+        normalized = normalized.strip()
+
+        if normalized != raw:
+            logger.warning(
+                "Channel {} credential `{}` contains hidden/whitespace characters; sanitized before use",
+                self.name,
+                field_name,
+            )
+
+        if not normalized:
+            if required:
+                logger.error("Channel {} credential `{}` not configured", self.name, field_name)
+            return None
+
+        if self._ENV_PLACEHOLDER_RE.match(normalized):
+            logger.error(
+                "Channel {} credential `{}` is unresolved env placeholder: {}",
+                self.name,
+                field_name,
+                normalized,
+            )
+            return None
+
+        return normalized
+
     def is_allowed(self, sender_id: str) -> bool:
         """
         Check if a sender is allowed to use this bot.
@@ -69,18 +109,53 @@ class BaseChannel(ABC):
             True if allowed, False otherwise.
         """
         allow_list = getattr(self.config, "allow_from", [])
+        if (
+            allow_list
+            and all(self._ENV_PLACEHOLDER_RE.match(str(item).strip()) for item in allow_list)
+        ):
+            if not getattr(self, "_warned_unresolved_allow_from", False):
+                logger.warning(
+                    "Channel {} allow_from contains unresolved env placeholders: {}",
+                    self.name,
+                    allow_list,
+                )
+                self._warned_unresolved_allow_from = True
 
         # If no allow list, allow everyone
         if not allow_list:
             return True
 
-        sender_str = str(sender_id)
-        if sender_str in allow_list:
+        normalized_allow: set[str] = set()
+        normalized_allow_ci: set[str] = set()
+        for item in allow_list:
+            text = str(item or "").strip()
+            if not text:
+                continue
+            normalized_allow.add(text)
+            normalized_allow_ci.add(text.lower())
+            if text.startswith("@") and len(text) > 1:
+                normalized_allow.add(text[1:])
+                normalized_allow_ci.add(text[1:].lower())
+
+        if not normalized_allow:
             return True
-        if "|" in sender_str:
-            for part in sender_str.split("|"):
-                if part and part in allow_list:
-                    return True
+
+        sender_str = str(sender_id or "").strip()
+        sender_parts = [p.strip() for p in sender_str.split("|") if p and p.strip()]
+        sender_parts.append(sender_str)
+        sender_variants: set[str] = set()
+        sender_variants_ci: set[str] = set()
+        for part in sender_parts:
+            sender_variants.add(part)
+            sender_variants_ci.add(part.lower())
+            if not part.startswith("@"):
+                sender_variants.add(f"@{part}")
+                sender_variants_ci.add(f"@{part}".lower())
+
+        if sender_variants & normalized_allow:
+            return True
+        if sender_variants_ci & normalized_allow_ci:
+            return True
         return False
 
     async def _handle_message(

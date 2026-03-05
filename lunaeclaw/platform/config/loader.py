@@ -298,6 +298,8 @@ def _slim_config_for_save(data: dict) -> dict:
 
 
 _ENV_VAR_PATTERN = re.compile(r"\$\{([A-Za-z_][A-Za-z0-9_]*)(?::-(.*?))?\}")
+_BASE_ENV_SNAPSHOT: dict[str, str] | None = None
+_LOADED_HELPER_ENV_KEYS: set[str] = set()
 
 
 def _discover_env_files() -> list[Path]:
@@ -336,7 +338,20 @@ def _parse_env_line(line: str) -> tuple[str, str] | None:
 
 
 def _load_env_files() -> None:
-    """Load env vars from ~/.lunaeclaw/.env and ~/.lunaeclaw/env/*.env without overriding existing vars."""
+    """
+    Load env vars from helper files with hot-reload semantics.
+
+    Rules:
+    - External/process env (present before first helper load) keeps precedence.
+    - Helper file values can update previous helper-loaded values on reload.
+    - Helper keys removed from files are removed from os.environ (unless external).
+    """
+    global _BASE_ENV_SNAPSHOT, _LOADED_HELPER_ENV_KEYS
+
+    if _BASE_ENV_SNAPSHOT is None:
+        _BASE_ENV_SNAPSHOT = dict(os.environ)
+
+    merged_helper_values: dict[str, str] = {}
     for path in _discover_env_files():
         try:
             for raw_line in path.read_text(encoding="utf-8").splitlines():
@@ -344,10 +359,27 @@ def _load_env_files() -> None:
                 if not parsed:
                     continue
                 key, val = parsed
-                os.environ.setdefault(key, val)
+                merged_helper_values[key] = val
         except Exception:
             # Keep config loading resilient even if a helper env file is malformed.
             continue
+
+    baseline = _BASE_ENV_SNAPSHOT or {}
+
+    # Remove helper keys that disappeared from helper files.
+    for key in list(_LOADED_HELPER_ENV_KEYS):
+        if key in baseline:
+            continue
+        if key not in merged_helper_values:
+            os.environ.pop(key, None)
+
+    # Apply helper values. External env keeps precedence.
+    for key, val in merged_helper_values.items():
+        if key in baseline:
+            continue
+        os.environ[key] = val
+
+    _LOADED_HELPER_ENV_KEYS = set(merged_helper_values.keys())
 
 
 def _expand_env_placeholders(text: str) -> str:

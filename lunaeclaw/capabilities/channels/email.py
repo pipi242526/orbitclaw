@@ -147,23 +147,31 @@ class EmailChannel(BaseChannel):
             raise
 
     def _validate_config(self) -> bool:
-        missing = []
-        if not self.config.imap_host:
-            missing.append("imap_host")
-        if not self.config.imap_username:
-            missing.append("imap_username")
-        if not self.config.imap_password:
-            missing.append("imap_password")
-        if not self.config.smtp_host:
-            missing.append("smtp_host")
-        if not self.config.smtp_username:
-            missing.append("smtp_username")
-        if not self.config.smtp_password:
-            missing.append("smtp_password")
+        normalized = {
+            "imap_host": self._prepare_credential("imap_host", self.config.imap_host, required=True),
+            "imap_username": self._prepare_credential("imap_username", self.config.imap_username, required=True),
+            "imap_password": self._prepare_credential("imap_password", self.config.imap_password, required=True),
+            "smtp_host": self._prepare_credential("smtp_host", self.config.smtp_host, required=True),
+            "smtp_username": self._prepare_credential("smtp_username", self.config.smtp_username, required=True),
+            "smtp_password": self._prepare_credential("smtp_password", self.config.smtp_password, required=True),
+        }
+
+        self.config.from_address = self._prepare_credential(
+            "from_address", self.config.from_address, required=False
+        ) or ""
+
+        missing = [field for field, value in normalized.items() if not value]
 
         if missing:
             logger.error("Email channel not configured, missing: {}", ', '.join(missing))
             return False
+
+        self.config.imap_host = normalized["imap_host"] or ""
+        self.config.imap_username = normalized["imap_username"] or ""
+        self.config.imap_password = normalized["imap_password"] or ""
+        self.config.smtp_host = normalized["smtp_host"] or ""
+        self.config.smtp_username = normalized["smtp_username"] or ""
+        self.config.smtp_password = normalized["smtp_password"] or ""
         return True
 
     def _smtp_send(self, msg: EmailMessage) -> None:

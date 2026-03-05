@@ -2,13 +2,13 @@
 
 from __future__ import annotations
 
-from html import escape
 from typing import Any
 
 from lunaeclaw.app.webui.catalog import (
     library_text as _library_text,
 )
 from lunaeclaw.app.webui.common import _pretty_json
+from lunaeclaw.app.webui.html_utils import escape
 from lunaeclaw.app.webui.i18n import ui_copy as _ui_copy
 from lunaeclaw.app.webui.i18n import ui_term as _ui_term
 from lunaeclaw.app.webui.icons import icon_svg
@@ -78,7 +78,7 @@ def render_skills(handler: Any, *, msg: str = "", err: str = "") -> None:
         }
         health_label = health_label_map.get(health["status"], health["label"])
         health_class = "ok" if health["status"] == "ready" else "off"
-        if not global_installed:
+        if health["status"] == "not_installed":
             action_html = (
                 f"""
 <form method="post" class="row">
@@ -88,7 +88,7 @@ def render_skills(handler: Any, *, msg: str = "", err: str = "") -> None:
 </form>
 """
             )
-        elif exists:
+        elif exists or global_installed:
             switch_title = "已启用，点击暂停" if (zh and skill_enabled) else "已暂停，点击启用" if zh else "Enabled, click to pause" if skill_enabled else "Paused, click to enable"
             switch_state = "on" if skill_enabled else "off"
             switch_label = "开" if (zh and skill_enabled) else "关" if zh else "ON" if skill_enabled else "OFF"

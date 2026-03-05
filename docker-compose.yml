@@ -4,7 +4,6 @@ x-lunaeclaw-common: &lunaeclaw-common
   build:
     context: .
     dockerfile: Dockerfile
-  image: lunaeclaw:local
   init: true
   restart: unless-stopped
   working_dir: /app
@@ -15,13 +14,17 @@ x-lunaeclaw-common: &lunaeclaw-common
     REQUESTS_CA_BUNDLE: /etc/ssl/certs/ca-certificates.crt
     CURL_CA_BUNDLE: /etc/ssl/certs/ca-certificates.crt
   volumes:
+    # Host runtime data dir (config/env/runtime/token/session).
+    # Default is repo-local ./.lunaeclaw-data to keep deployment self-contained.
+    # Host override: LUNAECLAW_HOST_DATA_DIR (fallback: legacy LUNAECLAW_DATA_DIR).
     - type: bind
-      source: ${LUNAECLAW_DATA_DIR:-./.lunaeclaw-data}
+      source: ${LUNAECLAW_HOST_DATA_DIR:-${LUNAECLAW_DATA_DIR:-./.lunaeclaw-data}}
       target: /root/.lunaeclaw
 
 services:
   lunaeclaw-gateway:
     <<: *lunaeclaw-common
+    image: lunaeclaw-gateway:local
     command: ["gateway", "--port", "${GATEWAY_PORT:-18790}"]
     ports:
       - "${GATEWAY_PORT:-18790}:${GATEWAY_PORT:-18790}"
@@ -30,7 +33,7 @@ services:
         - CMD
         - python
         - -c
-        - import json,sys,pathlib; p=pathlib.Path('/root/.lunaeclaw/runtime/gateway.state.json'); sys.exit(0 if p.exists() and json.loads(p.read_text(encoding='utf-8')).get('status')=='running' else 1)
+        - import json,sys,pathlib; p=pathlib.Path('/root/.lunaeclaw/runtime/gateway.state.json'); s=(json.loads(p.read_text(encoding='utf-8')).get('status') if p.exists() else ''); sys.exit(0 if s in ('running','waiting_config') else 1)
       interval: 15s
       timeout: 5s
       retries: 10
@@ -38,10 +41,11 @@ services:
 
   lunaeclaw-webui:
     <<: *lunaeclaw-common
+    image: lunaeclaw-webui:local
     command: ["webui", "--host", "0.0.0.0", "--port", "${WEBUI_PORT:-18791}"]
     depends_on:
       lunaeclaw-gateway:
-        condition: service_healthy
+        condition: service_started
     ports:
       - "${WEBUI_PORT:-18791}:${WEBUI_PORT:-18791}"
     healthcheck:
@@ -55,6 +59,7 @@ services:
 
   lunaeclaw-cli:
     <<: *lunaeclaw-common
+    image: lunaeclaw-cli:local
     profiles:
       - cli
     restart: "no"

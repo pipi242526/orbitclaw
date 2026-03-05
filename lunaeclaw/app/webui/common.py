@@ -318,7 +318,9 @@ def _collect_skill_rows(config: Config) -> list[dict[str, Any]]:
                 "disabled": False,
             }
         ]
-    loader = SkillsLoader(config.workspace_path, disabled_skills=set(config.skills.disabled or []))
+    # Keep disabled skills visible in WebUI tables; disabled state is tracked separately.
+    loader = SkillsLoader(config.workspace_path, disabled_skills=set())
+    disabled_set = {str(name).strip().lower() for name in (config.skills.disabled or []) if str(name).strip()}
     availability = {row["name"]: row for row in loader.build_availability_report()}
     rows: list[dict[str, Any]] = []
     for item in loader.list_skills(filter_unavailable=False):
@@ -331,7 +333,7 @@ def _collect_skill_rows(config: Config) -> list[dict[str, Any]]:
                 "path": item.get("path") or "",
                 "available": bool(diag.get("available", True)),
                 "requires": str(diag.get("requires") or ""),
-                "disabled": name in (config.skills.disabled or []),
+                "disabled": name.lower() in disabled_set,
             }
         )
     rows.sort(key=lambda r: (r["disabled"], r["source"], r["name"]))

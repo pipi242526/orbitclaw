@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
-from html import escape
 from pathlib import Path
 from typing import Any
 
 from lunaeclaw.app.webui.common import _MEDIA_PAGE_SIZE, _list_media_rows, _list_store_rows
+from lunaeclaw.app.webui.html_utils import escape
 from lunaeclaw.app.webui.i18n import ui_copy as _ui_copy
 from lunaeclaw.app.webui.i18n import ui_term as _ui_term
 from lunaeclaw.app.webui.icons import icon_svg

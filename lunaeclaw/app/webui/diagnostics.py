@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from lunaeclaw.app.webui.common import _is_env_placeholder
 from lunaeclaw.app.webui.i18n import ui_copy as _ui_copy
 from lunaeclaw.platform.config.migration_checker import collect_config_migration_findings
 from lunaeclaw.platform.config.schema import Config
@@ -47,6 +48,9 @@ def collect_channel_runtime_issues(raw_cfg: Config, resolved_cfg: Config, *, ui_
         for field_name in fields:
             raw_val = str(getattr(raw_channel, field_name) or "").strip()
             resolved_val = str(getattr(resolved_channel, field_name) or "").strip()
+            # If placeholder survives after env resolution, the env var is still missing.
+            if resolved_val and _is_env_placeholder(resolved_val):
+                resolved_val = ""
             if resolved_val:
                 continue
             if raw_val.startswith("${") and raw_val.endswith("}"):

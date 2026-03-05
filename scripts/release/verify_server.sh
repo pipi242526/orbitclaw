@@ -9,7 +9,7 @@ VERIFY_WEBUI="${VERIFY_WEBUI:-1}"
 if [[ -z "${SERVER_HOST}" ]]; then
   echo "[verify-server] SERVER_HOST is required"
   echo "[verify-server] example:"
-  echo "  SERVER_HOST=192.3.127.188 make verify-server"
+  echo "  SERVER_HOST=203.0.113.10 make verify-server"
   exit 1
 fi
 
@@ -23,6 +23,13 @@ ssh "${SSH_OPTS[@]}" "${REMOTE}" bash -s -- "${SERVER_DIR}" "${VERIFY_WEBUI}" <<
 set -euo pipefail
 REPO_DIR="$1"
 VERIFY_WEBUI="$2"
+HOST_DATA_DIR="${LUNAECLAW_HOST_DATA_DIR:-${LUNAECLAW_DATA_DIR:-${REPO_DIR}/.lunaeclaw-data}}"
+
+if [[ ! -d "${REPO_DIR}" ]]; then
+  if [[ "${REPO_DIR}" == "/root/LunaeClaw" && -d "/root/OrbitClaw" ]]; then
+    REPO_DIR="/root/OrbitClaw"
+  fi
+fi
 
 if [[ ! -d "${REPO_DIR}" ]]; then
   echo "[verify-server] missing repo dir: ${REPO_DIR}"
@@ -36,9 +43,13 @@ docker compose run --rm lunaeclaw-cli status
 
 if [[ "${VERIFY_WEBUI}" == "1" ]]; then
   echo "[verify-server] webui health check"
-  docker compose --profile webui up -d lunaeclaw-webui
+  docker compose --profile webui up -d --no-deps lunaeclaw-webui
 
-  TOKEN="$(docker compose exec -T lunaeclaw-webui sh -lc 'cat /root/.lunaeclaw/webui.path-token 2>/dev/null || cat /root/.lunaeclaw/webui.path_token 2>/dev/null || true' | tr -d '\r\n')"
+  TOKEN_FILE="${HOST_DATA_DIR}/webui.path-token"
+  if [[ ! -f "${TOKEN_FILE}" ]]; then
+    TOKEN_FILE="${HOST_DATA_DIR}/webui.path_token"
+  fi
+  TOKEN="$(cat "${TOKEN_FILE}" 2>/dev/null | tr -d '\r\n')"
   if [[ -z "${TOKEN}" ]]; then
     echo "[verify-server] webui path token not found"
     exit 1

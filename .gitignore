@@ -2,6 +2,7 @@
 .env
 .env.local
 .env.*.local
+.lunaeclaw-data/
 *.pyc
 dist/
 build/

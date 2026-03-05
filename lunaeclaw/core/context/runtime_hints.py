@@ -226,4 +226,12 @@ def build_runtime_context(
     if channel and chat_id:
         lines.append(f"Channel: {channel}")
         lines.append(f"Chat ID: {chat_id}")
+        if str(channel).strip().lower() == "webui":
+            lines.append(
+                "WebUI Access Rule: You can inspect server-side persisted state using tools "
+                "(config/.env/logs/files), but you cannot read unsaved browser form inputs."
+            )
+            lines.append(
+                "WebUI Action Rule: For config/env troubleshooting, run tools first and report concrete findings."
+            )
     return "\n".join(lines)

@@ -57,9 +57,14 @@ class DiscordChannel(BaseChannel):
 
     async def start(self) -> None:
         """Start the Discord gateway connection."""
-        if not self.config.token:
-            logger.error("Discord bot token not configured")
+        token_text = self._prepare_credential("token", self.config.token, required=True)
+        if not token_text:
             return
+        gateway_url = self._prepare_credential("gateway_url", self.config.gateway_url, required=True)
+        if not gateway_url:
+            return
+        self.config.token = token_text
+        self.config.gateway_url = gateway_url
 
         self._running = True
         self._http = httpx.AsyncClient(timeout=30.0)
@@ -67,7 +72,7 @@ class DiscordChannel(BaseChannel):
         while self._running:
             try:
                 logger.info("Connecting to Discord gateway...")
-                async with websockets.connect(self.config.gateway_url) as ws:
+                async with websockets.connect(gateway_url) as ws:
                     self._ws = ws
                     await self._gateway_loop()
             except asyncio.CancelledError:

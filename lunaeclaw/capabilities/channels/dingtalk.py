@@ -119,18 +119,21 @@ class DingTalkChannel(BaseChannel):
                 )
                 return
 
-            if not self.config.client_id or not self.config.client_secret:
-                logger.error("DingTalk client_id and client_secret not configured")
+            client_id = self._prepare_credential("client_id", self.config.client_id, required=True)
+            client_secret = self._prepare_credential("client_secret", self.config.client_secret, required=True)
+            if not client_id or not client_secret:
                 return
+            self.config.client_id = client_id
+            self.config.client_secret = client_secret
 
             self._running = True
             self._http = httpx.AsyncClient()
 
             logger.info(
                 "Initializing DingTalk Stream Client with Client ID: {}...",
-                self.config.client_id,
+                client_id,
             )
-            credential = Credential(self.config.client_id, self.config.client_secret)
+            credential = Credential(client_id, client_secret)
             self._client = DingTalkStreamClient(credential)
 
             # Register standard handler

@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from html import escape
 from typing import Any, Callable
 
 from lunaeclaw.app.webui.catalog import (
@@ -14,6 +13,7 @@ from lunaeclaw.app.webui.catalog import (
 from lunaeclaw.app.webui.catalog import (
     library_text as _library_text,
 )
+from lunaeclaw.app.webui.html_utils import escape
 from lunaeclaw.app.webui.i18n import ui_copy as _ui_copy
 from lunaeclaw.app.webui.i18n import ui_term as _ui_term
 from lunaeclaw.app.webui.icons import icon_svg

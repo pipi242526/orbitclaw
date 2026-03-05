@@ -12,6 +12,7 @@ from lunaeclaw.app.webui.actions_channels import handle_post_channels as _handle
 from lunaeclaw.app.webui.actions_chat import handle_post_chat as _handle_post_chat
 from lunaeclaw.app.webui.actions_endpoints import handle_post_endpoints as _handle_post_endpoints
 from lunaeclaw.app.webui.actions_mcp import handle_post_mcp as _handle_post_mcp
+from lunaeclaw.app.webui.actions_media import handle_post_media as _handle_post_media
 from lunaeclaw.app.webui.actions_skills import handle_post_skills as _handle_post_skills
 
 
@@ -38,3 +39,8 @@ def handle_post_mcp(handler: Any, form: dict[str, list[str]]) -> None:
 def handle_post_skills(handler: Any, form: dict[str, list[str]]) -> None:
     """Handle /skills POST actions."""
     _handle_post_skills(handler, form)
+
+
+def handle_post_media(handler: Any, form: dict[str, list[str]]) -> None:
+    """Handle /media POST actions."""
+    _handle_post_media(handler, form)

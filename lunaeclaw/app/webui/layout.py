@@ -2,8 +2,7 @@
 
 from __future__ import annotations
 
-from html import escape
-
+from lunaeclaw.app.webui.html_utils import escape
 from lunaeclaw.app.webui.icons import icon_svg, logo_svg
 
 
@@ -362,7 +361,7 @@ def render_page_shell(
     th {{ color: var(--muted); font-weight:600; }}
     tbody tr:hover td {{ background: color-mix(in srgb, var(--accent) 8%, transparent); }}
     code {{ font-family: var(--mono); background: var(--code-bg); padding:2px 4px; border-radius:4px; }}
-    .pill {{ display:inline-block; border-radius:999px; padding:2px 8px; font-size:11px; border:1px solid var(--line); }}
+    .pill {{ display:inline-flex; align-items:center; justify-content:center; white-space:nowrap; line-height:1.15; border-radius:999px; padding:2px 8px; font-size:11px; border:1px solid var(--line); }}
     .pill.ok {{ border-color: color-mix(in srgb, var(--ok) 42%, var(--line)); color: var(--ok); background: var(--badge-ok-bg); }}
     .pill.off {{ border-color: color-mix(in srgb, var(--err) 40%, var(--line)); color: var(--err); background: var(--badge-off-bg); }}
     .glass-toolbar {{

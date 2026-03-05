@@ -108,7 +108,7 @@ npm audit fix
 
 - run gateway + webui in containerized services
 - expose only required ports
-- bind one dedicated runtime directory via `LUNAECLAW_DATA_DIR`
+- bind one dedicated host runtime directory via `LUNAECLAW_HOST_DATA_DIR`
 
 ### Profile B: Bare metal / VM
 

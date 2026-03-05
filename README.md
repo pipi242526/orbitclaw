@@ -94,6 +94,12 @@ Default ports:
 - Gateway `18790`
 - WebUI `18791`
 
+Notes:
+
+- `./.lunaeclaw-data` is the default host bind-mount for runtime state (`config.json`, `.env`, `runtime/`, sessions, tokens). On servers this appears as `<repo>/.lunaeclaw-data` and is expected.
+- To change host storage location, set `LUNAECLAW_HOST_DATA_DIR=/abs/path` before `docker compose up`.
+- If no provider/model is configured yet, gateway stays in `waiting_config` (no restart storm). Configure API key/model in WebUI or `config.json`, then it will switch to `running`.
+
 ### Minimal editable install
 
 ```bash

@@ -30,18 +30,21 @@ class SlackChannel(BaseChannel):
 
     async def start(self) -> None:
         """Start the Slack Socket Mode client."""
-        if not self.config.bot_token or not self.config.app_token:
-            logger.error("Slack bot/app token not configured")
+        bot_token = self._prepare_credential("bot_token", self.config.bot_token, required=True)
+        app_token = self._prepare_credential("app_token", self.config.app_token, required=True)
+        if not bot_token or not app_token:
             return
         if self.config.mode != "socket":
             logger.error("Unsupported Slack mode: {}", self.config.mode)
             return
+        self.config.bot_token = bot_token
+        self.config.app_token = app_token
 
         self._running = True
 
-        self._web_client = AsyncWebClient(token=self.config.bot_token)
+        self._web_client = AsyncWebClient(token=bot_token)
         self._socket_client = SocketModeClient(
-            app_token=self.config.app_token,
+            app_token=app_token,
             web_client=self._web_client,
         )
 
@@ -248,4 +251,3 @@ class SlackChannel(BaseChannel):
             if parts:
                 rows.append(" · ".join(parts))
         return "\n".join(rows)
-

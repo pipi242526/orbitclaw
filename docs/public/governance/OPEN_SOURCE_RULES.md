@@ -8,6 +8,7 @@ This repository is public-facing. Keep only reusable runtime content in GitHub.
 - Deployment scripts tied to personal infra
 - Secrets: API keys, tokens, passwords, private certificates/keys
 - Personal notes, temporary debugging files, ad-hoc exports
+- Runtime bind-mount data (`.lunaeclaw-data/`)
 - Local override config files (`*.local.*`, `config.local.json`)
 - Internal-only trees (`docs/internal/`, `tests/internal/`, `release/internal/`)
 

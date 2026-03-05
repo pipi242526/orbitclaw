@@ -8,6 +8,7 @@ build/
 .git
 .env
 .assets
+.lunaeclaw-data/
 node_modules/
 bridge/dist/
 workspace/

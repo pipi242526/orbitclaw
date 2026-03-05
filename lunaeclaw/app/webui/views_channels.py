@@ -2,13 +2,13 @@
 
 from __future__ import annotations
 
-from html import escape
 from pathlib import Path
 from typing import Any, Callable
 
 from lunaeclaw.app.webui.common import (
     _pretty_json,
 )
+from lunaeclaw.app.webui.html_utils import escape
 from lunaeclaw.app.webui.i18n import ui_copy as _ui_copy
 from lunaeclaw.app.webui.i18n import ui_term as _ui_term
 from lunaeclaw.app.webui.icons import icon_svg
@@ -62,7 +62,7 @@ def render_channels(
                 f"""
 <div class="field">
   <label>{escape(label_text)}</label>
-  <input type="text" name="{escape(str(field["input_name"]))}" value="{escape(str(field["display_value"]))}" placeholder="{escape(str(field["env_hint"]))}">
+  <input type="text" name="{escape(str(field["input_name"]))}" value="{escape(str(field["display_value"]))}" placeholder="{escape(str(field["env_hint"]))}" data-clear-sample="{"1" if bool(field.get("clear_on_focus")) else "0"}" data-sample-value="{escape(str(field.get("sample_value") or ""))}">
 </div>
 """
             )
@@ -82,23 +82,23 @@ def render_channels(
         </select>
       </div>
     <div class="field">
-      <label>{t("credential env prefix", "凭据环境变量前缀")}</label>
-      <input type="text" name="ch_{escape(sid)}_env_prefix" value="{escape(str(channel["env_prefix"]))}" placeholder="{escape(str(channel["default_env_prefix"]))}">
+      <label>{t_dyn("credential env variable name", "凭据环境变量名")}</label>
+      <input type="text" name="ch_{escape(sid)}_env_prefix" value="{escape(str(channel.get("env_key_name") or channel["env_prefix"]))}" placeholder="{escape(str(channel.get("default_env_key_name") or channel["default_env_prefix"]))}">
     </div>
     <div class="field full">
       <label>{t("allowFrom list (CSV)", "allowFrom 列表（逗号分隔）")}</label>
-      <input type="text" name="ch_{escape(sid)}_allow_csv" value="{escape(str(channel["allow_csv"]))}" placeholder="{t('id1, id2', '用户ID1, 用户ID2')}">
+      <input type="text" name="ch_{escape(sid)}_allow_csv" value="{escape(str(channel["allow_csv"]))}" placeholder="{escape(str(channel.get("allow_placeholder") or t('id1, id2', '用户ID1, 用户ID2')))}" data-clear-sample="{"1" if bool(channel.get("allow_clear_on_focus")) else "0"}" data-sample-value="{escape(str(channel.get("allow_placeholder") or ""))}">
     </div>
       <div class="field">
         <label>{t("allowFrom storage", "allowFrom 存储方式")}</label>
         <select name="ch_{escape(sid)}_allow_mode">
           <option value="env_placeholders" {"selected" if str(channel["allow_mode"]) == "env_placeholders" else ""}>{t("env placeholders (recommended)", "环境变量占位（推荐）")}</option>
-          <option value="plain" {"selected" if str(channel["allow_mode"]) == "plain" else ""}>{t("plain list (not recommended)", "明文列表（不推荐）")}</option>
+          <option value="plain" {"selected" if str(channel["allow_mode"]) == "plain" else ""}>{t("plain text (not recommended)", "明文（不推荐）")}</option>
         </select>
       </div>
     <div class="field">
-      <label>{t("allowFrom env prefix", "allowFrom 环境变量前缀")}</label>
-      <input type="text" name="ch_{escape(sid)}_allow_env_prefix" value="{escape(str(channel["allow_prefix"]))}" placeholder="{escape(str(channel["default_allow_env_prefix"]))}">
+      <label>{t_dyn("allowFrom env variable name", "allowFrom 环境变量名")}</label>
+      <input type="text" name="ch_{escape(sid)}_allow_env_prefix" value="{escape(str(channel.get("allow_key_name") or channel["allow_prefix"]))}" placeholder="{escape(str(channel.get("default_allow_key_name") or channel["default_allow_env_prefix"]))}">
     </div>
   </div>
 </section>
@@ -151,9 +151,24 @@ def render_channels(
           card.classList.toggle('is-hidden', !hit);
         }}
       }}
+      function bindSampleClear() {{
+        const fields = Array.from(document.querySelectorAll('input[data-clear-sample=\"1\"]'));
+        for (const input of fields) {{
+          if (input.dataset.bound === '1') continue;
+          input.dataset.bound = '1';
+          input.addEventListener('focus', () => {{
+            const sample = String(input.dataset.sampleValue || '');
+            if (!sample) return;
+            if ((input.value || '').trim() === sample) {{
+              input.value = '';
+            }}
+          }});
+        }}
+      }}
       picker.value = hidden.value || picker.options[0].value;
       picker.addEventListener('change', showSelected);
       showSelected();
+      bindSampleClear();
     }})();
   </script>
 </section>

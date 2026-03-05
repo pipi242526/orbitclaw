@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from html import escape
+from lunaeclaw.app.webui.html_utils import escape
 
 _ICON_PATHS: dict[str, str] = {
     "copy": '<rect x="9" y="9" width="10" height="10" rx="2"></rect><path d="M7 15H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h7a2 2 0 0 1 2 2v1"></path>',

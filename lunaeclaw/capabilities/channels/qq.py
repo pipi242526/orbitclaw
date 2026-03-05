@@ -62,9 +62,12 @@ class QQChannel(BaseChannel):
             logger.error("QQ SDK not installed. Run: pip install qq-botpy")
             return
 
-        if not self.config.app_id or not self.config.secret:
-            logger.error("QQ app_id and secret not configured")
+        app_id = self._prepare_credential("app_id", self.config.app_id, required=True)
+        secret = self._prepare_credential("secret", self.config.secret, required=True)
+        if not app_id or not secret:
             return
+        self.config.app_id = app_id
+        self.config.secret = secret
 
         self._running = True
         bot_class = _make_bot_class(self)

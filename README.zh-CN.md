@@ -94,6 +94,12 @@ docker compose logs -f --tail=200
 - Gateway `18790`
 - WebUI `18791`
 
+说明：
+
+- `./.lunaeclaw-data` 是默认宿主机挂载目录，用于保存运行时状态（`config.json`、`.env`、`runtime/`、会话、token 等）。服务器上看到 `<repo>/.lunaeclaw-data` 属于正常现象。
+- 如需更换宿主机存储位置，启动前设置 `LUNAECLAW_HOST_DATA_DIR=/abs/path`。
+- 如果还没配置 provider/model，gateway 会进入 `waiting_config` 等待状态（不会重启风暴）。在 WebUI 或 `config.json` 配好 API key + model 后会自动切换到 `running`。
+
 ### 最小可用（editable 安装）
 
 ```bash

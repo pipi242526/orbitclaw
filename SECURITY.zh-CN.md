@@ -106,7 +106,7 @@ npm audit fix
 
 - gateway + webui 容器化
 - 只暴露必要端口
-- 用 `LUNAECLAW_DATA_DIR` 统一挂载数据目录
+- 用 `LUNAECLAW_HOST_DATA_DIR` 统一挂载宿主机数据目录
 
 ### 档位 B：裸机 / VM
 
