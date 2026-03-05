@@ -10,4 +10,5 @@ echo "[verify-local] start"
 ./scripts/release/prepublish_check.sh
 uv run --extra dev ruff check .
 uv run --extra dev pytest -q tests/public
+uv run --extra dev pytest -q tests/internal
 echo "[verify-local] done"

@@ -27,7 +27,8 @@ quality:
 	trap 'python3 scripts/quality/cleanup_runtime_cache.py >/dev/null 2>&1 || true' EXIT; \
 	uv run --extra dev python scripts/quality/lint_changed.py; \
 	uv run --extra dev python scripts/quality/file_line_report.py; \
-	uv run --extra dev pytest -q tests/public
+	uv run --extra dev pytest -q tests/public; \
+	uv run --extra dev pytest -q tests/internal
 
 line-report:
 	uv run --extra dev python scripts/quality/file_line_report.py
@@ -40,6 +41,7 @@ prepublish:
 	./scripts/release/prepublish_check.sh
 	uv run --extra dev ruff check .
 	uv run --extra dev pytest -q tests/public
+	uv run --extra dev pytest -q tests/internal
 
 export-public:
 	./scripts/release/export_public_snapshot.sh
