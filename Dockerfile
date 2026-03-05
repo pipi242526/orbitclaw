@@ -14,8 +14,14 @@ RUN set -eux; \
       | gpg --dearmor -o /etc/apt/keyrings/nodesource.gpg; \
     echo "deb [signed-by=/etc/apt/keyrings/nodesource.gpg] https://deb.nodesource.com/node_20.x nodistro main" \
       > /etc/apt/sources.list.d/nodesource.list; \
-    apt-get update; \
-    apt-get install -y --no-install-recommends nodejs; \
+    if apt-get update && apt-get install -y --no-install-recommends nodejs; then \
+      echo "installed nodejs from NodeSource"; \
+    else \
+      echo "NodeSource unavailable, falling back to Debian nodejs/npm"; \
+      rm -f /etc/apt/sources.list.d/nodesource.list; \
+      apt-get update; \
+      apt-get install -y --no-install-recommends nodejs npm; \
+    fi; \
     apt-get purge -y --auto-remove gnupg; \
     rm -rf /var/lib/apt/lists/*
 
