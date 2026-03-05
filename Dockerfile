@@ -8,21 +8,22 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 # Runtime deps: Node.js 20 (for WhatsApp bridge), git/curl/certs.
 RUN set -eux; \
     apt-get update; \
-    apt-get install -y --no-install-recommends ca-certificates curl git gnupg; \
-    mkdir -p /etc/apt/keyrings; \
-    curl -fsSL https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.key \
-      | gpg --dearmor -o /etc/apt/keyrings/nodesource.gpg; \
-    echo "deb [signed-by=/etc/apt/keyrings/nodesource.gpg] https://deb.nodesource.com/node_20.x nodistro main" \
-      > /etc/apt/sources.list.d/nodesource.list; \
-    if apt-get update && apt-get install -y --no-install-recommends nodejs; then \
-      echo "installed nodejs from NodeSource"; \
-    else \
-      echo "NodeSource unavailable, falling back to Debian nodejs/npm"; \
-      rm -f /etc/apt/sources.list.d/nodesource.list; \
-      apt-get update; \
-      apt-get install -y --no-install-recommends nodejs npm; \
-    fi; \
-    apt-get purge -y --auto-remove gnupg; \
+    apt-get install -y --no-install-recommends ca-certificates curl git xz-utils; \
+    arch="$(dpkg --print-architecture)"; \
+    case "${arch}" in \
+      amd64) node_arch="x64" ;; \
+      arm64) node_arch="arm64" ;; \
+      *) echo "unsupported arch: ${arch}" >&2; exit 1 ;; \
+    esac; \
+    node_dist_url="https://nodejs.org/dist/latest-v20.x"; \
+    node_tar="$(curl -fsSL "${node_dist_url}/SHASUMS256.txt" | awk -v a="linux-${node_arch}.tar.xz" '$2 ~ a {print $2; exit}')"; \
+    test -n "${node_tar}"; \
+    curl -fsSLO "${node_dist_url}/${node_tar}"; \
+    curl -fsSL "${node_dist_url}/SHASUMS256.txt" | grep " ${node_tar}\$" | sha256sum -c -; \
+    tar -xJf "${node_tar}" -C /usr/local --strip-components=1 --no-same-owner; \
+    rm -f "${node_tar}"; \
+    node --version; \
+    npm --version; \
     rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
